@@ -1,0 +1,10 @@
+# Test-only overrides (inherits ddl-auto=validate, Flyway, Batch, and Modulith settings from application.yml)
+meterflow:
+  scheduling:
+    enabled: false
+  security:
+    bootstrap:
+      enabled: true
+      admin-password: test-admin-password
+      operator-password: test-operator-password
+      customer-password: test-customer-password

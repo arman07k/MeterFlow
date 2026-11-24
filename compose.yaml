@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: meterflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-meterflow}
+      POSTGRES_USER: ${POSTGRES_USER:-meterflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meterflow_local_dev_only}
+      TZ: UTC
+    ports:
+      - "${LOCAL_PG_PORT:-5432}:5432"
+    volumes:
+      - meterflow_pg_data:/var/lib/postgresql/data
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-meterflow} -d ${POSTGRES_DB:-meterflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meterflow-app
+    profiles: ["full"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      LOCAL_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-meterflow}
+      POSTGRES_USER: ${POSTGRES_USER:-meterflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-meterflow_local_dev_only}
+      SERVER_PORT: 8080
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 25s
+
+volumes:
+  meterflow_pg_data:

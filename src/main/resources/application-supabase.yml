@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    # Flyway requires Direct or Supavisor Session Mode (port 5432) for PostgreSQL advisory locks.
+    url: ${SUPABASE_DB_URL}
+    username: ${SUPABASE_DB_USERNAME}
+    password: ${SUPABASE_DB_PASSWORD}
+    hikari:
+      pool-name: meterflow-supabase-pool
+      maximum-pool-size: 6
+      minimum-idle: 2
+      max-lifetime: 600000
+      connection-timeout: 15000
+
+meterflow:
+  batch:
+    # Keep batch concurrency single-threaded on shared Supabase free-tier connection quotas (ADR-002, ADR-005).
+    concurrency-limit: 1

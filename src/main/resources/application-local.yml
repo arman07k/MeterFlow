@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: ${LOCAL_DB_URL:jdbc:postgresql://localhost:5432/meterflow}?reWriteBatchedInserts=true
+    username: ${POSTGRES_USER:meterflow}
+    password: ${POSTGRES_PASSWORD:meterflow_local_dev_only}
+    hikari:
+      pool-name: meterflow-local-pool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 10000
+  thymeleaf:
+    cache: false
+
+meterflow:
+  batch:
+    concurrency-limit: 4
+  security:
+    bootstrap:
+      enabled: true
+      admin-password: ${METERFLOW_BOOTSTRAP_ADMIN_PASSWORD:change-me-local-admin}
+      operator-password: ${METERFLOW_BOOTSTRAP_OPERATOR_PASSWORD:change-me-local-operator}
+      customer-password: ${METERFLOW_BOOTSTRAP_CUSTOMER_PASSWORD:change-me-local-customer}

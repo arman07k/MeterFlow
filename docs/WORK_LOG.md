@@ -33,6 +33,24 @@ This log records chronological, auditable engineering and architecture activitie
 
 ## 3. Chronological Log Entries
 
+### 2026-11-25 — Final Submission Audit, Traceability Alignment & Production-Quality README Preparation
+
+- **Contributor(s)**: AI Engineering Agent (supervised by Repository Owner)
+- **Deliverable Target**: Final University Submission Documentation & Repository Readiness Audit ([`PLAN.md`](../PLAN.md))
+- **Requirement IDs**: `FR1`–`FR10`, `QA1`–`QA5`, `C1`–`C12`
+- **Summary of Changes**:
+  - Rewrote [`README.md`](../README.md) with verified Flyway migration filenames (`V1`–`V8`), Mermaid architecture and ingestion-to-invoicing data flow diagrams, exact resolved stack versions, environment configuration table grounded in `.env.example`, verified `/api/v1/**` endpoint summary, security controls and caveats, canonical `QA1`–`QA5` benchmark evidence with methodology/limitations, repository structure, CI/CD summary, explicit no-license disclosure, and grounded academic context.
+  - Updated [`docs/REQUIREMENTS_TRACEABILITY.md`](./REQUIREMENTS_TRACEABILITY.md) with an explicit notice that no original instructor handout/rubric file exists in the repository, truthful statuses (marking `FR7`, `QA1`, `C5`, `C10`, `C11` as `Partially verified` with exact explanations), and verified file/endpoint references.
+  - Aligned [`docs/architecture/DATA_MODEL.md`](./architecture/DATA_MODEL.md) (ER diagram and `V6`–`V8` table/index names), [`docs/architecture/QUALITY_ATTRIBUTE_PLAN.md`](./architecture/QUALITY_ATTRIBUTE_PLAN.md) (actual `perf/k6/qa*.js` scripts), [`docs/DEFENCE_GUIDE.md`](./DEFENCE_GUIDE.md) (`ChargeCalculationStrategy` + canonical `QA1`–`QA5` alignment), [`MEMORY.md`](../MEMORY.md), and [`PLAN.md`](../PLAN.md).
+  - Created [`docs/TESTING_AND_BENCHMARK_REPORT.md`](./TESTING_AND_BENCHMARK_REPORT.md), [`docs/SECURITY_OVERVIEW.md`](./SECURITY_OVERVIEW.md), and [`docs/DEMO_AND_SCREENSHOT_GUIDE.md`](./DEMO_AND_SCREENSHOT_GUIDE.md) (live demo runbook, troubleshooting guide, and manual screenshot capture checklist with zero fabricated screenshots).
+  - Zero application code changes, zero `V1`–`V8` migration changes, and zero Git commits/pushes performed.
+- **Verification Executed**:
+  - Relative Markdown link resolution check across all modified/created docs, prohibited tracking-label scan, secret & machine-path scan, `V1`–`V8` migration immutability diff check, `git diff --check`, `docker compose config -q`, and `.\mvnw.cmd -B test`.
+- **Risks / Open Items**:
+  - Original instructor rubric/handout file not present in repository; UI screenshots must be captured manually via [`docs/DEMO_AND_SCREENSHOT_GUIDE.md`](./DEMO_AND_SCREENSHOT_GUIDE.md); remote GitHub Actions CI run status on `main` should be confirmed on GitHub; host `k6` CLI and live `supabase` profile remain unexecuted locally.
+
+---
+
 ### 2026-11-25 — Final Pre-Submission Engineering Audit, Security/UI Hardening, Billing/Metering Optimization & Full-Scale QA1/QA2/QA3 Verification
 
 - **Contributor(s)**: AI Engineering Agent (supervised by Repository Owner)

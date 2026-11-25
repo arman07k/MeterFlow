@@ -15,33 +15,39 @@ MeterFlow persists all domain state, Spring Batch metadata, internal outbox reco
 
 ---
 
-## 2. Core Entity-Relationship Diagram
+## 2. Core Entity-Relationship Diagram (Verified Against `V1`–`V8`)
 
 ```mermaid
 erDiagram
-    customer_accounts ||--o{ subscriptions : "holds"
-    customer_accounts ||--o{ credit_grants : "funded_with"
-    customer_accounts ||--o{ spend_budgets : "configures"
-    customer_accounts ||--o{ webhook_endpoints : "registers"
+    customers ||--o{ customer_memberships : "grants_access"
+    users ||--o{ customer_memberships : "belongs_to"
+    customers ||--o{ subscriptions : "holds"
+    customers ||--o{ prepaid_credit_grants : "funded_with"
+    customers ||--o{ webhook_endpoints : "registers"
+    customers ||--o{ notifications : "receives"
     pricing_plans ||--|{ plan_versions : "versions"
     plan_versions ||--o{ plan_charges : "defines"
     plan_charges ||--o{ charge_tiers : "brackets"
+    plan_versions ||--o{ free_allowances : "grants"
+    plan_versions ||--o{ minimum_commitments : "enforces"
     billable_metrics ||--o{ metric_filters : "filters"
     billable_metrics ||--o{ plan_charges : "measured_by"
-    subscriptions ||--|{ subscription_segments : "sliced_into"
-    plan_versions ||--o{ subscription_segments : "governs"
-    customer_accounts ||--o{ usage_events : "emits"
-    subscriptions ||--o{ usage_rollups : "sync_aggregates"
-    spend_budgets ||--o{ budget_alerts_fired : "triggers"
-    customer_accounts ||--o{ invoices : "billed_via"
+    subscriptions ||--|{ subscription_plan_assignments : "assigned_over"
+    plan_versions ||--o{ subscription_plan_assignments : "governs"
+    subscriptions ||--o{ subscription_proration_records : "prorates"
+    customers ||--o{ usage_events : "emits"
+    customers ||--o{ usage_rollups : "hourly_aggregates"
+    customers ||--o{ usage_threshold_evaluations : "triggers_alerts"
+    customers ||--o{ invoices : "billed_via"
     invoices ||--|{ invoice_lines : "traces"
     invoices ||--o{ invoice_tax_lines : "taxes"
     invoices ||--o{ credit_notes : "adjusted_by"
     credit_notes ||--|{ credit_note_lines : "reverses"
-    subscriptions ||--o{ late_usage_adjustments : "accrues_late_delta"
+    customers ||--o{ billing_adjustments : "accrues_adjustments"
     invoices ||--o{ payment_transactions : "collected_by"
+    payment_transactions ||--|{ payment_attempts : "logs_attempts"
     invoices ||--o| dunning_cases : "enters_dunning"
-    dunning_cases ||--o{ dunning_attempts : "logs_3_retries"
+    dunning_cases ||--o{ dunning_events : "logs_transitions"
     webhook_endpoints ||--o{ webhook_deliveries : "queues"
     webhook_deliveries ||--o{ webhook_delivery_attempts : "logs"
 ```
@@ -79,36 +85,39 @@ erDiagram
 - **`usage_rejected_events`** *(conflict & validation audit trail without raw sensitive payloads)*: `id UUID PK`, `customer_id UUID NULL`, `metric_id UUID NULL`, `idempotency_key VARCHAR(150) NULL`, `rejection_code VARCHAR(48)`, `rejection_reason VARCHAR(500)`, `event_timestamp TIMESTAMPTZ NULL`, `payload_hash VARCHAR(64) NULL`, `rejected_at TIMESTAMPTZ`; index `idx_usage_rejected_customer_at`.
 - **`usage_threshold_evaluations`** *(deduplicated `FR7` `50%`/`80%`/`100%` threshold foundation)*: `id UUID PK`, `customer_id UUID FK`, `subscription_id UUID NULL FK`, `metric_id UUID NULL FK`, `scope_key VARCHAR(120)`, `window_start`/`window_end TIMESTAMPTZ`, `threshold_percent INTEGER CHECK IN (50, 80, 100)`, `limit_value NUMERIC(19,6)`, `current_value NUMERIC(24,6)`, `utilization_percent NUMERIC(10,4)`, `triggered_at TIMESTAMPTZ`, `UNIQUE (customer_id, scope_key, window_start, window_end, threshold_percent)`.
 
-### 3.5 `billing` Module (`FR5`, `FR6`)
-- **`billing_runs`**: `id UUID PK`, `batch_job_execution_id BIGINT`, `run_type VARCHAR(24)` (`DRAFT_GENERATION`, `FINALIZATION`), `cutoff_timestamp TIMESTAMPTZ`, `status VARCHAR(24)`, `invoices_processed INTEGER`, `started_at TIMESTAMPTZ`, `completed_at TIMESTAMPTZ`.
-- **`invoices`** *(monetary/line fields immutable once `FINALIZED`)*: `id UUID PK`, `invoice_number VARCHAR(50) UNIQUE NULL`, `customer_id UUID NOT NULL`, `subscription_id UUID NOT NULL`, `billing_run_id UUID NULL`, `period_start TIMESTAMPTZ`, `period_end TIMESTAMPTZ`, `grace_expires_at TIMESTAMPTZ`, `currency_code CHAR(3)`, `subtotal_amount NUMERIC(19,4)`, `tax_amount NUMERIC(19,4)`, `total_amount NUMERIC(19,4)`, `credits_applied_amount NUMERIC(19,4)`, `credit_notes_applied_amount NUMERIC(19,4)`, `amount_due NUMERIC(19,4)`, `status VARCHAR(24)` (`DRAFT`, `FINALIZED`, `PAID`, `PAST_DUE`, `WRITTEN_OFF`, `VOID`), `finalized_at TIMESTAMPTZ NULL`, `due_at TIMESTAMPTZ NULL`, `version BIGINT`, `UNIQUE (subscription_id, period_start, period_end) WHERE status <> 'VOID'`.
-- **`invoice_lines`** *(full line-level traceability, `FR5`)*: `id UUID PK`, `invoice_id UUID FK`, `line_order SMALLINT`, `line_type VARCHAR(32)` (`BASE_FEE`, `USAGE_CHARGE`, `SEAT_CHARGE`, `MINIMUM_COMMITMENT_TRUE_UP`, `PRORATION_CREDIT`, `LATE_USAGE_ADJUSTMENT`), `subscription_id UUID NOT NULL`, `subscription_segment_id UUID NULL`, `plan_version_id UUID NOT NULL`, `plan_charge_id UUID NULL`, `billable_metric_id UUID NULL`, `charge_type VARCHAR(24) NULL`, `aggregation_type VARCHAR(20) NULL`, `window_start TIMESTAMPTZ NOT NULL`, `window_end TIMESTAMPTZ NOT NULL`, `seat_quantity INTEGER NULL`, `raw_quantity NUMERIC(19,4)`, `free_units_applied NUMERIC(19,4)`, `billable_quantity NUMERIC(19,4)`, `proration_factor NUMERIC(19,8)`, `effective_unit_price NUMERIC(19,8) NULL`, `line_amount NUMERIC(19,4) NOT NULL`, `calculation_breakdown JSONB NOT NULL`.
-- **`invoice_tax_lines`**, **`credit_grants`**, **`credit_ledger_entries`**, **`credit_notes`**, **`credit_note_lines`**, **`late_usage_adjustments`**: Retain exact `NUMERIC(19,4)` amounts, `remaining_amount >= 0`, `trigger_usage_event_id UNIQUE`, and immutable links to `original_invoice_id` / `original_invoice_line_id`.
+### 3.5 `billing` Module (`V6__billing_schema.sql` — Verified on PostgreSQL 17, `FR5`, `FR6`, [ADR-014](./ADRs/ADR-014-billing-invoicing-tax-credits-and-batch-execution.md))
+- **Sequences**: `invoice_number_seq` (`START WITH 100001`), `credit_note_number_seq` (`START WITH 100001`).
+- **`billing_runs`**: Batch run coordination (`DRAFT_GENERATION`, `FINALIZATION`, `cutoff_timestamp`, `batch_job_execution_id`, `status` IN `RUNNING`/`COMPLETED`/`FAILED`, `processed_count`/`created_count`/`skipped_count`/`failed_count`).
+- **`tax_policies`**: Deterministic percentage tax rules (`policy_code`, `name`, optional `customer_id`, `jurisdiction`, `tax_name`, `rate_percent NUMERIC(7,4)`, `tax_exempt`, `active`).
+- **`invoices`** *(protected by `trg_guard_finalized_invoice_immutable` once non-`DRAFT`)*: `id UUID PK`, `invoice_number VARCHAR(50) UNIQUE NULL`, `customer_id`, `subscription_id`, `billing_run_id`, `period_start`/`period_end`/`grace_expires_at`, `currency_code`, `subtotal_amount`, `taxable_amount`, `tax_amount`, `total_amount`, `credits_applied_amount`, `credit_notes_applied_amount`, `amount_due` (`NUMERIC(19,4)`), `payable_amount_due` (`NUMERIC(19,2)`), `status` (`DRAFT`, `FINALIZED`, `PAID`, `PAST_DUE`, `WRITTEN_OFF`, `VOID`), partial unique index `uq_invoices_sub_period_active`.
+- **`invoice_lines`** *(protected by `trg_guard_invoice_lines_immutable`)* & **`invoice_tax_lines`** *(protected by `trg_guard_invoice_tax_lines_immutable`)*: Full line-level provenance (`subscription_id`, `plan_version_id`, `charge_id`, `charge_code`, `charge_type`, `metric_id`, `window_start`/`window_end`, `seat_quantity`, `raw_quantity`, `free_allowance_quantity`, `billable_quantity`, `unit_price`, `line_amount`, `source_reference_id`, `calculation_breakdown JSONB`).
+- **`prepaid_credit_grants`** & **`credit_transactions`**: FIFO wallet drawdown (`remaining_amount >= 0`, `SELECT ... FOR UPDATE`) with append-only `ISSUED`/`CONSUMED`/`REVERSED` transaction history.
+- **`credit_notes`** & **`credit_note_lines`**: Immutable post-finalization credit notes (`CN-<YYYY>-<seq>`) referencing `original_invoice_id` with proportional tax reversal and wallet refunds.
+- **`billing_adjustments`**: Cumulative-delta `LATE_USAGE` (unique per `late_usage_record_id`, referencing `original_invoice_id`) plus `MANUAL_CREDIT` and `MANUAL_DEBIT` adjustments (`PENDING` -> `APPLIED_TO_DRAFT` -> `BILLED` / `VOID`).
 
-### 3.6 `payments` Module (`FR8`)
-- **`payment_transactions`**: `id UUID PK`, `invoice_id UUID NOT NULL`, `customer_id UUID NOT NULL`, `idempotency_key VARCHAR(150) UNIQUE NOT NULL`, `amount NUMERIC(19,4) CHECK (amount > 0)`, `simulation_mode VARCHAR(32)` (`SIMULATE_SUCCESS`, `SIMULATE_SOFT_DECLINE`, `SIMULATE_HARD_DECLINE`, `SIMULATE_TIMEOUT`), `status VARCHAR(24)` (`CAPTURED`, `SOFT_DECLINED`, `HARD_DECLINED`, `FAILED_TIMEOUT`), `failure_code VARCHAR(64) NULL`, `processed_at TIMESTAMPTZ`; partial unique index `uq_captured_payment_per_invoice ON payment_transactions(invoice_id) WHERE status = 'CAPTURED'`.
-- **`ledger_entries`**: `id UUID PK`, `customer_id UUID`, `invoice_id UUID NULL`, `credit_note_id UUID NULL`, `payment_transaction_id UUID NULL`, `entry_type VARCHAR(16)` (`DEBIT`, `CREDIT`), `account_bucket VARCHAR(32)` (`ACCOUNTS_RECEIVABLE`, `REVENUE`, `TAX_PAYABLE`, `CREDIT_LIABILITY`, `SIMULATED_CASH`), `amount NUMERIC(19,4) NOT NULL`, `recorded_at TIMESTAMPTZ`.
-- **`dunning_policies`** *(strict separation of payment retry timers vs. state-transition timer)*: `id UUID PK`, `name VARCHAR(100) UNIQUE`, **`retry_offsets_hours JSONB NOT NULL DEFAULT '[24, 72, 168]'`** (exactly **3** payment retries: Day 1, Day 3, Day 7; `CHECK (jsonb_array_length(retry_offsets_hours) = 3)`), **`suspension_offset_hours INTEGER NOT NULL DEFAULT 336`** (`CHECK (suspension_offset_hours >= 168)` — separate state-transition timer for `FINAL_WARNING -> SUSPENDED`; **never** executes a 4th payment attempt), `default_policy BOOLEAN`.
-- **`dunning_cases`** & **`dunning_attempts`**: `dunning_cases` tracks `id UUID PK`, `invoice_id UUID UNIQUE`, `subscription_id UUID`, `dunning_policy_id UUID`, `retries_completed SMALLINT NOT NULL DEFAULT 0 CHECK (retries_completed BETWEEN 0 AND 3)`, `next_retry_at TIMESTAMPTZ NULL`, **`suspension_at TIMESTAMPTZ NULL`**, `status VARCHAR(24)` (`RETRY_SCHEDULED`, `FINAL_WARNING`, `SUSPENDED`, `RECOVERED`, `WRITTEN_OFF`), `opened_at TIMESTAMPTZ`, `closed_at TIMESTAMPTZ NULL`; `dunning_attempts` records each of the `1`–`3` payment retry attempts linked to `payment_transaction_id`.
+### 3.6 `payments` Module (`V7__payments_and_dunning_schema.sql` — Verified on PostgreSQL 17, `FR8`, [ADR-015](./ADRs/ADR-015-payments-mock-processor-dunning-retries-and-suspension.md))
+- **Sequence & Extension**: `payment_reference_seq` (`START WITH 100001`), plus forward extension of `subscriptions` constraints to support `SUSPENDED`.
+- **`dunning_policies`**: Seeded with `DEFAULT_DAY_1_3_7` (`retry_offsets_hours = '[24, 72, 168]'`, `suspension_offset_hours = 336`) strictly separating the 3 payment retries from the post-warning suspension transition timer.
+- **`dunning_cases`**: One case per invoice (`invoice_id UNIQUE`), tracking `retries_completed` (`0..3`), `next_retry_at`, separate `suspension_at`, and `status` (`RETRY_SCHEDULED`, `FINAL_WARNING`, `SUSPENDED`, `RECOVERED`, `CANCELLED`).
+- **`payment_transactions`** *(protected by `trg_guard_completed_payment_immutable`)*: `payment_reference UNIQUE`, `idempotency_key` (`uq_payment_tx_idempotency` scoped by `(customer_id, idempotency_key)`), `attempt_source` (`MANUAL`, `AUTO_INITIAL`, `DUNNING_RETRY`), `attempt_number` (`0..3`), `simulation_outcome` (`SIMULATE_SUCCESS`, `SIMULATE_SOFT_DECLINE`, `SIMULATE_HARD_DECLINE`, `SIMULATE_TIMEOUT`), `status` (`PENDING`, `CAPTURED`, `FAILED`), partial unique index `uq_captured_payment_per_invoice` preventing double capture.
+- **`payment_attempts`** *(append-only trigger `trg_guard_payment_attempts_append_only`)* & **`dunning_events`** *(append-only trigger `trg_guard_dunning_events_append_only`)*: Immutable audit trail of every payment attempt and dunning state transition.
 
-### 3.7 `webhooks` & `notifications` Modules (`FR9`, `QA4`, `QA5`)
-- **`webhook_endpoints`** *(safe dual-key secret rotation)*: `id UUID PK`, `customer_id UUID NULL`, `target_url VARCHAR(500) NOT NULL`, **`active_signing_secret_enc TEXT NOT NULL`**, **`previous_signing_secret_enc TEXT NULL`**, **`previous_secret_expires_at TIMESTAMPTZ NULL`**, `subscribed_events JSONB NOT NULL` (validates membership in `invoice.finalised`, `payment.failed`, `usage.threshold_reached`, and optional catalog events), `active BOOLEAN NOT NULL DEFAULT true`, `created_at TIMESTAMPTZ`.
-- **`webhook_deliveries`**: `id UUID PK`, `endpoint_id UUID FK`, `source_event_id UUID NOT NULL`, `event_type VARCHAR(80) NOT NULL`, `payload JSONB NOT NULL`, `status VARCHAR(24)` (`PENDING`, `RETRYING`, `DELIVERED`, `EXHAUSTED`), `attempt_count SMALLINT DEFAULT 0`, `next_attempt_at TIMESTAMPTZ NOT NULL`, `last_http_status SMALLINT NULL`, `created_at TIMESTAMPTZ`, `UNIQUE (endpoint_id, source_event_id)`.
-- **`webhook_delivery_attempts`**: `id UUID PK`, `delivery_id UUID FK`, `attempt_number SMALLINT`, `is_manual_replay BOOLEAN DEFAULT false`, **`replayed_by_user_id UUID NULL`**, `signature_timestamp BIGINT NOT NULL`, `http_status SMALLINT NULL`, `duration_ms INTEGER`, `response_excerpt VARCHAR(500) NULL`, `error_reason VARCHAR(255) NULL`, `attempted_at TIMESTAMPTZ`.
-- **`notification_logs`** & **`audit_logs`**: `notification_logs` (`uq_notification_event` on `(recipient_scope, source_event_id)`); `audit_logs` (`actor`, `action`, `entity_type`, `entity_id`, `details JSONB`, `occurred_at TIMESTAMPTZ`).
+### 3.7 `webhooks` & `notifications` Modules (`V8__webhooks_and_notifications_schema.sql` — Verified on PostgreSQL 17, `FR9`, `QA4`, `QA5`, [ADR-009](./ADRs/ADR-009-outbound-hmac-webhooks-backoff-and-replay.md))
+- **`webhook_endpoints`**: Customer-scoped webhook targets (`target_url VARCHAR(1000)`) with AES-256-GCM encrypted `active_signing_secret_enc`, `previous_signing_secret_enc`, `previous_secret_expires_at` (24h dual-key rotation window), `subscribed_events JSONB`, `active` toggle, and soft-delete `deleted_at`.
+- **`webhook_deliveries`**: Durable `FOR UPDATE SKIP LOCKED` delivery queue (`payload_json TEXT`, `status` IN `PENDING`/`RETRYING`/`DELIVERED`/`EXHAUSTED`, `attempt_count`, `max_attempts` default `6`, `next_attempt_at`, `UNIQUE (webhook_endpoint_id, source_event_id)`).
+- **`webhook_delivery_attempts`** *(protected by `trg_webhook_delivery_attempts_immutable`)*: Append-only attempt log recording `attempt_number`, `is_manual_replay`, `replayed_by_user_id`, `signature_timestamp`, `http_status`, `duration_ms`, and error/response excerpt.
+- **`notifications`** & **`audit_logs`** *(protected by `trg_audit_logs_immutable`)*: Idempotent customer notifications with read/unread state (`notifications`) and immutable operational/replay audit trail (`audit_logs`).
 
-### 3.8 Framework Tables (Flyway-Governed, `C5`, `C8`)
-- **`event_publication`** (Spring Modulith JPA outbox) and **`BATCH_*`** (Spring Batch 6 JDBC repository, `spring.batch.jdbc.initialize-schema=never`).
+### 3.8 Framework Tables (`V1__framework_outbox_and_batch_schema.sql` — Verified on PostgreSQL 17, `C5`, `C8`)
+- **`event_publication`** (Spring Modulith 2.0.4 JPA outbox) and **`BATCH_*`** (`BATCH_JOB_INSTANCE`, `BATCH_JOB_EXECUTION`, `BATCH_JOB_EXECUTION_PARAMS`, `BATCH_STEP_EXECUTION`, `BATCH_STEP_EXECUTION_CONTEXT`, `BATCH_JOB_EXECUTION_CONTEXT`, plus 3 Spring Batch 6 sequences; `spring.batch.jdbc.initialize-schema=never`).
 
 ---
 
 ## 4. High-Selectivity Indexes (`QA1`, `QA2`)
 
-1. `uq_usage_events_customer_idempotency UNIQUE ON usage_events (customer_id, idempotency_key)` — Atomic `FR1` deduplication and `409` conflict check.
-2. `idx_usage_events_sub_metric_ts ON usage_events (subscription_id, metric_code, event_timestamp ASC)` — Powers exact segment window aggregations and `UNIQUE_COUNT`.
-3. `idx_usage_events_props_gin ON usage_events USING GIN (properties jsonb_path_ops)` — Accelerates configurable `FR2` dimensional filter predicates.
-4. `idx_usage_rollups_sub_bucket ON usage_rollups (subscription_id, bucket_hour DESC)` — Powers `< 50 ms` `FR7` live estimates (`<= 744` hourly rows/month).
-5. `idx_credit_grants_drawdown ON credit_grants (customer_id, expires_at ASC NULLS LAST, priority ASC, created_at ASC) WHERE remaining_amount > 0` — Deterministic `FR6` credit drawdown.
-6. `idx_dunning_cases_due_retry ON dunning_cases (next_retry_at ASC) WHERE status = 'RETRY_SCHEDULED' AND next_retry_at IS NOT NULL` and `idx_dunning_cases_due_suspend ON dunning_cases (suspension_at ASC) WHERE status = 'FINAL_WARNING' AND suspension_at IS NOT NULL` — Separate constant-cost polling indexes for payment retries vs. suspension transition (`FR8`).
-7. `idx_webhook_deliveries_due ON webhook_deliveries (next_attempt_at ASC) WHERE status IN ('PENDING', 'RETRYING')` — Constant-cost `FOR UPDATE SKIP LOCKED` polling (`FR9`).
-8. `idx_event_publication_incomplete ON event_publication (publication_date ASC) WHERE completion_date IS NULL` — Constant-cost internal outbox retry scans (`C8`).
+1. `uq_usage_events_customer_idempotency` on `usage_events (customer_id, idempotency_key)` — Atomic `FR1` deduplication and `409` conflict check.
+2. `idx_usage_events_cust_metric_ts` on `usage_events (customer_id, metric_id, event_timestamp ASC)` — Powers window aggregations and exact `UNIQUE_COUNT`.
+3. `idx_usage_events_props_gin` on `usage_events USING GIN (properties)` — Accelerates configurable `FR2` dimensional filter predicates.
+4. `idx_usage_rollups_cust_metric_bucket` on `usage_rollups (customer_id, metric_id, bucket_start)` — Powers fast `FR7` live estimates and authoritative rollup reads.
+5. Partial unique `uq_invoices_sub_period_active` on `invoices` & `uq_captured_payment_per_invoice` on `payment_transactions` — Prevents double billing and double payment capture under concurrency.
+6. Due-work polling indexes on `dunning_cases` (`next_retry_at` and `suspension_at`), `webhook_deliveries` (`next_attempt_at`), and `event_publication` (`completion_date IS NULL`) — Constant-cost `FOR UPDATE SKIP LOCKED` / outbox worker polling.

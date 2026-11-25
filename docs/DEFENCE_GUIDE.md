@@ -38,8 +38,8 @@ This guide maps every MeterFlow architectural claim directly to implemented code
   - **Dunning & Webhooks**: `SELECT ... FOR UPDATE SKIP LOCKED` workers (`DunningCaseRepository`, `WebhookDeliveryRepository`) allow concurrent workers with zero duplicate retries or duplicate webhook dispatches (`V7`, `V8`).
   - **Outbox**: Spring Modulith `event_publication` table guarantees domain events commit atomically with database writes (`V1`).
 
-### 4. Pricing Engine Extensibility (Open/Closed Principle — `QA4`)
-- **What to say**: All 6 mandatory charge models (`FLAT_FEE`, `PER_UNIT`, `GRADUATED_TIERS`, `VOLUME_TIERS`, `PACKAGE`, `PER_SEAT`) implement `ChargePricingStrategy` and self-register via Spring DI into `ChargeStrategyRegistry`. Charge types are strings, not a closed enum.
+### 4. Pricing Engine Extensibility (Open/Closed Principle — `QA3`)
+- **What to say**: All 6 mandatory charge models (`FLAT_FEE`, `PER_UNIT`, `GRADUATED_TIERS`, `VOLUME_TIERS`, `PACKAGE`, `PER_SEAT`) implement `ChargeCalculationStrategy` and self-register via Spring DI into `ChargeStrategyRegistry`. Charge types are strings, not a closed enum.
 - **Proof**: `PricingEngineUnitTests` registers a 7th custom strategy bean at runtime and rates a plan with zero modifications to existing rating code.
 
 ### 5. Database-Enforced Financial Immutability
@@ -60,19 +60,19 @@ This guide maps every MeterFlow architectural claim directly to implemented code
 
 ---
 
-## Verified Quantitative Evidence (`QA1`–`QA5`)
+## Verified Quantitative Evidence (Canonical `QA1`–`QA5`)
 
-All numbers below are genuine, reproducible measurements from `mvnw clean verify` and `QaScaleBenchmarkIT` (PostgreSQL 17 Testcontainers on local Docker):
+All numbers below are genuine, reproducible measurements from `./mvnw -B clean verify` and `QaScaleBenchmarkIT` (PostgreSQL 17 Testcontainers on local Docker; see [`TESTING_AND_BENCHMARK_REPORT.md`](./TESTING_AND_BENCHMARK_REPORT.md) for methodology):
 
-| Quality Attribute | Metric | Measured Result |
+| Quality Attribute | Metric / Scenario | Measured Result |
 |---|---|---|
-| **Verification Suite** | Automated Tests | **100 / 100 core PASS** (63 Surefire + 37 Failsafe) + **2 / 2 full-scale benchmarks PASS** (`0` failures/errors) |
+| **Verification Suite (`C9`)** | Automated Tests | **100 / 100 core PASS** (63 Surefire + 37 Failsafe) + **2 / 2 opt-in scale benchmarks PASS** (`0` failures/errors) |
 | **Toolchain Compatibility** | Compilation | Java 25 (`release 25`) & Java 21 (`-Pjava21`, `release 21`) — `432` main + `23` test files, `0` warnings |
-| **QA1 (1M-Event Accuracy)** | 1,000,000 unique + 30,000 dup (3%) + 20,000 late (2%) | `0` errors, `143 MiB` heap, **0.00 paisa** deviation across all 10 customers (`6,050.00 BDT` exact per customer) |
-| **QA2 (Throughput & Latency)** | 1M events across 4 threads + batch-250 / batch-1,000 | **`16,586.5 events/sec`** (`60.29 s`); batch-250 **`p50 = 35 ms`, `p95 = 46 ms`, `p99 = 49 ms`**; batch-1,000 **`p50 = 204 ms`, `p95 = 295 ms`, `p99 = 371 ms`** *(stateless HTTP Basic BCrypt adds ~100 ms per HTTP call)* |
-| **QA3 (10k-Customer Batch)** | 10,000 customers via Spring Batch 6 (`chunk=100`, keyset) | Draft **`181.6 s`** + Finalization **`160.6 s`** = **`5m 42.2s` (`< 10m` SLA)**, `163 MiB` heap, `197 ms` idempotent re-run (`0` duplicates) |
-| **QA4 (OCP & Security)** | 7th charge strategy + cross-tenant/CSRF/CSP/SSRF/HMAC | 100% pass across `PricingEngineUnitTests`, `SecurityFoundationTests`, `PortalUiIT`, `WebhookNotificationAndSimulationIT` |
-| **QA5 (Traceability)** | Live estimate vs. finalized invoice + FR10 simulation | **`0.0000%` deviation** (`< 1%` target); JSONB provenance on 100% of invoice lines; zero-write historical simulation |
+| **QA1 (Performance, Throughput & Freshness)** | 1M events (4 threads) + batch-250 / batch-1,000 + 10k-customer Spring Batch + live estimate freshness | **`16,586.5 events/sec`** (`60.29 s`); batch-250 **`p50 = 35 ms`, `p95 = 46 ms`, `p99 = 49 ms`**; batch-1,000 **`p50 = 204 ms`, `p95 = 295 ms`, `p99 = 371 ms`** *(HTTP Basic BCrypt adds ~100 ms per HTTP call)*; `10,000` customers billed in **`5m 42.2s`** (`181.6 s` draft + `160.6 s` finalization, `163 MiB` heap); `15s` Caffeine TTL freshness |
+| **QA2 (Financial Correctness & Reliability)** | 1M unique + 30k dup (3%) + 20k late (2%) + 10k re-run + estimate parity | `0` errors, `143 MiB` heap, **0.00 paisa** deviation across all 10 customers (`6,050.00 BDT` exact/customer); **`0.0000%`** live-estimate vs. finalized deviation; `197 ms` 10k-customer re-run (`0` duplicates); `13` DB immutability triggers verified |
+| **QA3 (Modularity & OCP Extensibility)** | 10 Spring Modulith modules + 7th custom `ChargeCalculationStrategy` | `ModularityTests` (`1/1` PASS, `0` cycles/leaks); 7th strategy verified with `0` edits to existing pricing code |
+| **QA4 (Security & Webhook Integrity)** | RBAC, CSRF, strict CSP, tenant isolation, AES-256-GCM, dual-key HMAC, SSRF | 100% pass across `SecurityFoundationTests`, `IdentityAndSecurityIT`, `WebhookSecurityAndBackoffUnitTests`, `WebhookNotificationAndSimulationIT`, and `PortalUiIT` |
+| **QA5 (Testability, Reproducibility & Observability)** | Offline Testcontainers CI, `Clock` injection, JSONB line provenance, Docker Compose health | `100/100` core + `2/2` scale PASS offline; `/actuator/health/readiness` `HTTP 200 UP`; JSONB provenance on 100% of invoice lines; zero-write `FR10` simulation |
 
 ## Honest Limitations to State Transparently
 

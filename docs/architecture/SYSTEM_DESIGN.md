@@ -89,41 +89,40 @@ flowchart TB
 sequenceDiagram
     autonumber
     actor Client as Ingestion Producer
-    participant API as portal (EventIngestionController)
+    participant API as portal (MeteringController)
     participant Met as metering (UsageIngestionService)
     participant Caf as Caffeine (metricDefinitions + liveEstimates)
     participant PG as PostgreSQL (usage_events + usage_rollups + event_publication)
-    participant Bill as billing (LateEventAdjustmentListener)
+    participant Bill as billing (BillingAdjustmentService)
 
-    Client->>API: POST /api/v1/events (idempotency_key, customer_id, subscription_id, metric_code, event_timestamp, properties)
+    Client->>API: POST /api/v1/events (idempotency_key, customer_id, subscription_id, metric_id, event_timestamp, properties)
     API->>Met: ingest(event + SHA-256 payload_hash)
     Met->>PG: BEGIN TX - Check existing (customer_id, idempotency_key) FIRST (before 72h check)
     alt Existing key found
         alt payload_hash matches
-            Met-->>API: 200 OK (DUPLICATE_IGNORED - 0 rows inserted, 0 rollup delta)
+            Met-->>API: 200 OK (DUPLICATE - 0 rows inserted, 0 rollup delta)
         else payload_hash differs
-            Met->>PG: INSERT rejected_usage_events (IDEMPOTENCY_KEY_CONFLICT)
+            Met->>PG: INSERT usage_rejected_events (IDEMPOTENCY_KEY_CONFLICT)
             Met-->>API: 409 Conflict (IDEMPOTENCY_KEY_CONFLICT)
         end
     else New idempotency_key
         Met->>Met: Verify timestamp <= ingested_at + 5m AND ingested_at - event_timestamp <= 72h
         alt Late > 72h or Future > 5m
-            Met->>PG: INSERT rejected_usage_events (EXPIRED_LATE_EVENT / FUTURE_TIMESTAMP)
-            Met-->>API: 422 Unprocessable Entity
+            Met->>PG: INSERT usage_rejected_events (LATE_WINDOW_EXCEEDED / FUTURE_TIMESTAMP)
+            Met-->>API: 422 Unprocessable Content
         else Valid Event
             Met->>PG: INSERT usage_events ON CONFLICT (customer_id, idempotency_key) DO NOTHING RETURNING id
             alt Lost concurrent race (0 rows returned)
                 Met->>PG: Re-read winning row & compare payload_hash (200 Duplicate or 409 Conflict)
             else Won insert
-                Met->>PG: Synchronous UPSERT usage_rollups (subscription_id, metric_id, bucket_hour)
+                Met->>PG: Synchronous UPSERT usage_rollups (customer_id, metric_id, bucket_start)
                 opt Event falls into closed prior billing period
-                    Met->>PG: INSERT event_publication (PriorPeriodLateEventRecorded)
+                    Met->>PG: INSERT usage_late_event_records + event_publication (LateUsageEventRecordedEvent)
                 end
-                Met->>PG: COMMIT TX -> after-commit evicts subscriptionId from liveEstimates
-                Met-->>API: 202 Accepted
-                opt PriorPeriodLateEventRecorded emitted
-                    PG--)Bill: Async @ApplicationModuleListener
-                    Bill->>PG: If DRAFT -> re-rate draft; If FINALIZED -> cumulative-delta late_usage_adjustments
+                Met->>PG: COMMIT TX -> after-commit evicts customer/subscription key from liveEstimates
+                Met-->>API: 201 Created / 200 OK
+                opt LateUsageEventRecordedEvent / LateUsageQueryFacade processed
+                    Bill->>PG: Cumulative-delta billing_adjustments applied to next DRAFT invoice
                 end
             end
         end
@@ -182,9 +181,9 @@ Naive designs that rely on a `60-second` background rollup job plus a `30-second
 | **5. Cache Miss Recompute & Read (`T_read`)** | `0.08 s` | `0.25 s` (`QA1` `p95`) | Reads `<= 744` hourly rollup rows + cached immutable `planVersions` through `RatingEngineFacade`. |
 | **Total End-to-End Live Estimate Freshness** | **`0.23 s`** | **`15.65 s`** | **Proven `<= 60.00 s` (`44.35 s` safety margin) using Caffeine + PostgreSQL only.** |
 
-### Budget Alert Freshness (`usage.threshold_reached`) & Financial Safety Rule
+### Usage Threshold Alert Evaluation (`usage.threshold_reached`) & Financial Safety Rule
 
-- **Budget Evaluator Timing**: A lightweight `@Scheduled(fixedDelay = 10_000)` budget evaluator (or after-commit async check) compares updated `usage_rollups` against active `spend_budgets`, inserts `budget_alerts_fired` (`uq_budget_alert_once`), and publishes `BudgetThresholdExceededEvent` (`usage.threshold_reached`). Worst-case ingestion-to-alert time: `0.40 s` (ingest) + `10.00 s` (evaluator interval) + `0.25 s` (rate/insert) + `5.00 s` (initial webhook HTTP timeout) = **`15.65 s` (`<= 60.00 s`)**.
+- **Threshold Evaluation (`FR7`)**: `UsageThresholdFacade.evaluateThresholds(...)` (exposed to staff via `POST /api/v1/metering/thresholds/evaluate`) evaluates current aggregated usage against supplied thresholds (`50%`, `80%`, `100%`), records deduplicated rows in `usage_threshold_evaluations` (`uq_usage_threshold_once`), and publishes `UsageThresholdReachedEvent` via Spring Modulith's transactional outbox for `notifications` and `webhooks` (`usage.threshold_reached`). *(Note: a standalone customer-managed spend-budget CRUD entity/UI is not implemented; see [`REQUIREMENTS_TRACEABILITY.md`](../REQUIREMENTS_TRACEABILITY.md).)*
 - **Strict Financial Isolation**: **`liveEstimates` in Caffeine is strictly read-only telemetry.** Draft/Final Invoices (`FR5`), Credit Notes (`FR6`), Late Adjustments (`FR6`), and Invoice Simulations (`FR10`) **never** read from Caffeine `liveEstimates`; they always query committed PostgreSQL state inside ACID transactions.
 
 ---
@@ -196,9 +195,9 @@ Naive designs that rely on a `60-second` background rollup job plus a `30-second
    - `PlanRatingComposite` (`RatingEngineFacade`) orchestrates single-pass free-allowance deduction (preventing double consumption across charges sharing a metric), strategy execution, charge-level and plan-level minimum commitment true-ups, and `ADR-010` rounding—reused identically by read-only `PricingSimulationService` (`PricingSimulationFacade`).
    - Adding any future charge type requires one new `ChargeCalculationStrategy` bean with **zero edits** to existing strategy classes or `PlanRatingComposite` (`OCP`, proven by automated test-only 7th strategy verification).
 2. **Rounding & Evaluation Order (`QA2`, [ADR-010](./ADRs/ADR-010-financial-precision-currency-and-rounding-policy.md))**:
-   - All monetary math uses canonical immutable `com.meterflow.shared.Money` (`SupportedCurrency.BDT` and `SupportedCurrency.USD`, `0` `double`/`float`, no implicit intermediate rounding): `roundToIntermediate()` (`NUMERIC(19,8)` `HALF_UP`) for proration factors and unit rates, `roundToPersisted()` (`NUMERIC(19,4)` `HALF_UP`) per persisted `invoice_lines` / `credit_note_lines` / `ledger_entries` row, and `roundToPayable()` (`2` decimals — exact paisa for `BDT`, exact cents for `USD`, `HALF_UP`) for final customer settlement.
+   - All monetary math uses canonical immutable `com.meterflow.shared.Money` (`SupportedCurrency.BDT` and `SupportedCurrency.USD`, `0` `double`/`float`, no implicit intermediate rounding): `roundToIntermediate()` (`NUMERIC(19,8)` `HALF_UP`) for proration factors and unit rates, `roundToPersisted()` (`NUMERIC(19,4)` `HALF_UP`) per persisted `invoice_lines` / `credit_note_lines` / `credit_transactions` / `payment_transactions` row, and `roundToPayable()` (`2` decimals — exact paisa for `BDT`, exact cents for `USD`, `HALF_UP`) for final customer settlement.
    - Exact order: `Segment Aggregation -> Prorated Free Allowance -> Charge Strategy -> Minimum Commitment True-Up -> Carry-Forward Late Adjustments -> Subtotal (SUM of rounded lines) -> Tax -> FIFO Credit Wallet Drawdown -> Net Amount Due`.
-3. **Cumulative-Delta Re-Rating (`FR1`, `FR6`)**: Post-finalization `<= 72h` late events re-rate the entire period cumulatively via `RatingEngineFacade` and persist `delta = new_period_charge - prior_billed_charge` in `late_usage_adjustments` without touching the `FINALIZED` invoice.
+3. **Cumulative-Delta Re-Rating (`FR1`, `FR6`)**: Post-finalization `<= 72h` late events re-rate the entire period cumulatively via `RatingEngineFacade` and persist `delta = new_period_charge - prior_billed_charge` in `billing_adjustments` without touching the `FINALIZED` invoice.
 4. **Subscription Proration & Period Management (`FR4`, [ADR-012](./ADRs/ADR-012-subscription-workflow-billing-periods-and-proration.md))**: `subscriptions` enforces single-open-subscription per customer (`uq_subscriptions_one_open_per_customer` + PostgreSQL advisory lock), `PUBLISHED`-only plan versions, calendar-clamped zoned `BillingPeriod` boundaries (`shared`), exact-seconds UTC `EXACT_SECONDS_V1` proration via `RatingEngineFacade.rateRecurringCharges` (rating only fixed recurring charges while listing non-proratable usage charges in `subscription_proration_records`), immutable `subscription_plan_assignments` segments, conflict-safe scheduled period-end changes, pause/resume period shifting, and restart-safe repeatable maintenance (`SubscriptionMaintenanceFacade`).
 5. **High-Throughput Metering, Rollups & Freshness (`FR1`, `FR2`, `FR7`, [ADR-013](./ADRs/ADR-013-metering-ingestion-idempotency-rollups-and-freshness.md))**: `metering` ingests batches up to `1,000` events via single-round-trip PostgreSQL `UNNEST ... ON CONFLICT (customer_id, idempotency_key) DO NOTHING RETURNING`, resolves only conflicted keys for duplicate vs. `409` payload-hash discrimination, tracks `<= 72h` late events in `usage_late_event_records` + `LateUsageEventRecordedEvent`, pre-aggregates newly inserted rows into deadlock-free sorted hourly `usage_rollups` inside the same ACID transaction, combines `usage_rollups` with exact sub-hour edge queries (and indexed `UNIQUE_COUNT` / `MetricEvaluationSupport` filtered queries), reconciles/recovers deterministically from immutable `usage_events`, evicts `15s` Caffeine `liveEstimates` after commit, and emits deduplicated `50%`/`80%`/`100%` `UsageThresholdReachedEvent` outbox records.
 

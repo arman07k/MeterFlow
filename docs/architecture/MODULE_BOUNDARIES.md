@@ -30,57 +30,38 @@ com.meterflow
 | **`catalog`** | Closed *(depends on `shared`, `identity :: api`)* | Verified `V3` metric definitions & `5` filters (`FR2`), immutable `PUBLISHED` `plan_versions` + DB triggers + cloning (`FR10`), **all `6` mandatory charge strategies** (`FLAT_FEE`, `PER_UNIT`, `GRADUATED_TIERS`, `VOLUME_TIERS`, `PACKAGE` ceiling, `PER_SEAT`) + OCP `ChargeStrategyRegistry` + `PlanRatingComposite` (`FR3`, incl. `rateRecurringCharges` for `FR4` proration), single-pass allowances, commitments, read-only `PricingSimulationFacade`, and Caffeine `planVersions`/`metricDefinitions`. | `MetricCatalogFacade`, `PlanCatalogFacade`, **`RatingEngineFacade`**, `PricingSimulationFacade`, `ChargeCalculationStrategy` (OCP SPI), `MetricEvaluationSupport`, `ChargeTypes`, `RecurringQuoteRequest`, `RecurringPlanQuote`, immutable DTOs & typed exceptions | Planned `MetricUpdatedEvent`, `PlanVersionPublishedEvent` | None |
 | **`subscriptions`** | Closed *(depends on `shared`, `identity :: api`, `catalog :: api`)* | Verified `V4` subscriptions, single-open-subscription policy, authoritative transitions (`TRIALING`, `ACTIVE`, `PAUSED`, `PAST_DUE`, `CANCELLED`, `EXPIRED`), trials (`EXPIRE_ON_END` / `AUTO_CONVERT_TO_PAID`), immediate mid-cycle upgrades/downgrades with exact-seconds `EXACT_SECONDS_V1` proration (`ProrationCalculator`), scheduled period-end changes, pause/resume period shift, immutable `subscription_plan_assignments`, `subscription_proration_records`, `subscription_state_transitions`, and restart-safe `SubscriptionMaintenanceFacade` (`FR4`, [ADR-012](./ADRs/ADR-012-subscription-workflow-billing-periods-and-proration.md)). | `SubscriptionManagementFacade`, `SubscriptionQueryFacade`, `SubscriptionMaintenanceFacade`, `SubscriptionStatus`, `TrialConversionPolicy`, `PlanChangeDirection`, `ScheduledChangeStatus`, `SubscriptionSummary`, `SubscriptionHistory`, `ProrationRecord`, `ScheduledPlanChangeRecord`, `SubscriptionPlanAssignmentRecord`, `SubscriptionTransitionRecord`, command DTOs & typed exceptions | Planned `SubscriptionStartedEvent`, `SubscriptionPlanChangedEvent`, `SubscriptionCancelledEvent` | Planned `DunningSuspensionTriggeredEvent`, `DunningRecoveredEvent` |
 | **`metering`** | Closed *(depends on `shared`, `identity :: api`, `catalog :: api`, `subscriptions :: api`)* | Verified `V5` single-round-trip `UNNEST` batch ingestion (`<= 1,000`, partial acceptance), `(customer_id, idempotency_key)` + `SHA-256` `payload_hash` (`200` duplicate / `409` conflict), `72h` late tracking (`FR1`), all `5` aggregations & `5` filters reusing `MetricEvaluationSupport` (`FR2`), transactional hourly `usage_rollups` + sub-hour edge queries + ACID reconciliation/recovery, `15s` after-commit Caffeine `liveEstimates`, deduplicated `50/80/100%` threshold evaluator, & low-cardinality Micrometer metrics (`FR7`, [ADR-013](./ADRs/ADR-013-metering-ingestion-idempotency-rollups-and-freshness.md)). | `UsageIngestionFacade`, `UsageQueryFacade`, `LateUsageQueryFacade`, `UsageReconciliationFacade`, `UsageThresholdFacade`, immutable DTOs, command records & typed `MeteringException`s | `LateUsageEventRecordedEvent`, `UsageThresholdReachedEvent` | Planned `SubscriptionPlanChangedEvent`, `MetricUpdatedEvent` (after-commit cache eviction) |
-| **`billing`** | Closed | Two-step Spring Batch (`generateDraftInvoicesJob`, `finalizeInvoicesJob`), immutable `FINALIZED` invoices, tax, full line provenance (`FR5`), credit grants, credit notes, cumulative-delta late adjustments (`FR6`), and `@Transactional(readOnly = true)` invoice simulation (`FR10`). | `BillingJobFacade`, `InvoiceQueryFacade`, `CreditManagementFacade`, `InvoiceSimulationFacade`, `PayableInvoiceDTO` | `InvoiceDraftGeneratedEvent`, `InvoiceFinalizedEvent` (`invoice.finalised`), `CreditNoteIssuedEvent`, `LateAdjustmentRecordedEvent` | `PriorPeriodLateEventRecorded`, `PaymentCapturedEvent`, `InvoiceWrittenOffEvent` |
-| **`payments`** | Closed | Deterministic `SimulatedPaymentService`, exact **Day 1 / Day 3 / Day 7 (`[24, 72, 168]`)** retry worker, separate `suspension_at` state-transition timer, dunning recovery (`FR8`), and balanced `ledger_entries`. | `SimulatedPaymentFacade`, `DunningManagementFacade`, `LedgerQueryFacade` | `PaymentCapturedEvent`, `InvoicePaymentFailedEvent` (`payment.failed`), `DunningFinalWarningEvent`, `DunningSuspensionTriggeredEvent`, `DunningRecoveredEvent`, `InvoiceWrittenOffEvent` | `InvoiceFinalizedEvent`, `CreditNoteIssuedEvent` |
-| **`webhooks`** | Closed | Endpoint registry, dual-key encrypted `HMAC-SHA256` signer (`active` + `previous` rotation grace window), SSRF IP validator, PostgreSQL `SKIP LOCKED` exponential backoff dispatcher, attempt history, and RBAC-scoped manual replay (`FR9`). | `WebhookEndpointFacade`, `WebhookDeliveryQueryFacade`, `WebhookReplayFacade` | None | `InvoiceFinalizedEvent` (`invoice.finalised`), `InvoicePaymentFailedEvent` (`payment.failed`), `BudgetThresholdExceededEvent` (`usage.threshold_reached`), plus optional billing/dunning events |
-| **`notifications`** | Closed | In-app customer/operator notifications for every dunning transition, budget alert, and billing event + immutable `audit_logs` (`FR7`, `FR8`, `QA5`). | `NotificationQueryFacade`, `AuditLogQueryFacade` | None | All billing, budget, dunning, security, and webhook-replay audit events |
-| **`portal`** | Closed | **Spring MVC + Thymeleaf** UI controllers/templates and `/api/v1/events` REST ingestion controller. | None (top-most presentation adapter) | None | None |
+| **`billing`** | Closed *(depends on `shared`, `identity :: api`, `catalog :: api`, `subscriptions :: api`, `metering :: api`)* | Two-step Spring Batch (`generateDraftInvoicesJob`, `finalizeInvoicesJob`), immutable `FINALIZED` invoices, tax, full line provenance (`FR5`), prepaid credit grants, credit notes, cumulative-delta late & manual adjustments (`FR6`), and `@Transactional(readOnly = true)` historical invoice simulation (`FR10`). | `BillingRunFacade`, `InvoiceManagementFacade`, `TaxPolicyFacade`, `PrepaidCreditFacade`, `CreditNoteFacade`, `BillingAdjustmentFacade`, `HistoricalInvoiceSimulationFacade`, `TaxCalculationStrategy` | `InvoiceFinalizedEvent` (`invoice.finalised`), `CreditNoteIssuedEvent` (`credit_note.issued`) | `LateUsageEventRecordedEvent` |
+| **`payments`** | Closed *(depends on `shared`, `identity :: api`, `subscriptions :: api`, `billing :: api`)* | Deterministic `MockPaymentGateway`, exact **Day 1 / Day 3 / Day 7 (`[24, 72, 168]`)** retry worker, separate `suspension_at` state-transition timer (`FOR UPDATE SKIP LOCKED`), ACID billing/subscription settlement & recovery (`FR8`). | `PaymentProcessingFacade`, `PaymentQueryFacade`, `DunningManagementFacade`, `DunningPolicyFacade` | `PaymentSucceededEvent`, `PaymentFailedEvent` (`payment.failed`), `PaymentRetryScheduledEvent`, `SubscriptionSuspendedForNonPaymentEvent`, `SubscriptionReactivatedAfterPaymentEvent` | None (called synchronously via facades/scheduled worker; publishes outbox events) |
+| **`webhooks`** | Closed *(depends on `shared`, `identity :: api`, `billing :: api`, `payments :: api`, `metering :: api`)* | Endpoint registry, AES-256-GCM encrypted dual-key `HMAC-SHA256` signer (`24h` rotation grace window), `SsrfUrlValidator`, PostgreSQL `SKIP LOCKED` exponential backoff dispatcher (`+30s/+2m/+10m/+1h/+6h`), immutable attempt history, and RBAC-scoped auditable manual replay (`FR9`). | `WebhookEndpointFacade`, `WebhookDeliveryFacade`, `WebhookSignatureVerifier` | `WebhookReplayAuditEvent` | `InvoiceFinalizedEvent`, `CreditNoteIssuedEvent`, `PaymentSucceededEvent`, `PaymentFailedEvent`, `SubscriptionSuspendedForNonPaymentEvent`, `SubscriptionReactivatedAfterPaymentEvent`, `UsageThresholdReachedEvent` |
+| **`notifications`** | Closed *(depends on `shared`, `identity :: api`, `billing :: api`, `payments :: api`, `metering :: api`, `webhooks :: api`)* | Idempotent customer notifications for billing, payment/dunning, and threshold alerts + immutable `audit_logs` (`FR7`, `FR8`, `FR9`, `QA5`). | `NotificationFacade`, `AuditLogFacade` | None | `InvoiceFinalizedEvent`, `CreditNoteIssuedEvent`, `PaymentSucceededEvent`, `PaymentFailedEvent`, `SubscriptionSuspendedForNonPaymentEvent`, `SubscriptionReactivatedAfterPaymentEvent`, `UsageThresholdReachedEvent`, `WebhookReplayAuditEvent` |
+| **`portal`** | Closed *(depends on `shared` and all `8` domain `:: api` packages)* | **Spring MVC + Thymeleaf** Customer/Operator portals and `/api/v1/**` REST controllers + `GlobalApiExceptionHandler` + `PageResponse`. | None (top-most presentation adapter) | None | None |
 
 ---
 
-## 3. Synchronous Dependency Graph (Verified Strict DAG)
+## 3. Synchronous Dependency Graph (Verified Strict DAG Matching `package-info.java`)
 
 ```mermaid
 flowchart TD
-    Portal["portal (Level 6)"]
-    Payments["payments (Level 5)"]
-    Billing["billing (Level 4)"]
-    Metering["metering (Level 3)"]
-    Subscriptions["subscriptions (Level 2)"]
-    Identity["identity (Level 1)"]
-    Catalog["catalog (Level 1)"]
-    Webhooks["webhooks (Level 1)"]
-    Notifications["notifications (Level 1)"]
-    Shared["shared - OPEN Kernel (Level 0)"]
+    Portal["portal"]
+    Notifications["notifications"]
+    Webhooks["webhooks"]
+    Payments["payments"]
+    Billing["billing"]
+    Metering["metering"]
+    Subscriptions["subscriptions"]
+    Catalog["catalog"]
+    Identity["identity"]
+    Shared["shared - OPEN Kernel"]
 
-    Portal --> Identity
-    Portal --> Catalog
-    Portal --> Subscriptions
-    Portal --> Metering
-    Portal --> Billing
-    Portal --> Payments
-    Portal --> Webhooks
-    Portal --> Notifications
-
-    Payments -->|"billing.api (PayableInvoiceDTO)"| Billing
-    Billing -->|"subscriptions.api"| Subscriptions
-    Billing -->|"catalog.api (RatingEngineFacade)"| Catalog
-    Billing -->|"metering.api (UsageAggregationFacade)"| Metering
-    Metering -->|"identity.api (IdentityQueryFacade)"| Identity
-    Metering -->|"subscriptions.api (SubscriptionQueryFacade)"| Subscriptions
-    Metering -->|"catalog.api (MetricCatalogFacade, PlanCatalogFacade & RatingEngineFacade)"| Catalog
-    Subscriptions -->|"identity.api (IdentityQueryFacade)"| Identity
-    Subscriptions -->|"catalog.api (PlanCatalogFacade & RatingEngineFacade)"| Catalog
-
-    Portal --> Shared
-    Payments --> Shared
-    Billing --> Shared
-    Metering --> Shared
-    Subscriptions --> Shared
+    Portal --> Identity & Catalog & Subscriptions & Metering & Billing & Payments & Webhooks & Notifications
+    Notifications --> Identity & Billing & Payments & Metering & Webhooks
+    Webhooks --> Identity & Billing & Payments & Metering
+    Payments --> Identity & Subscriptions & Billing
+    Billing --> Identity & Catalog & Subscriptions & Metering
+    Metering --> Identity & Catalog & Subscriptions
+    Subscriptions --> Identity & Catalog
+    Catalog --> Identity
     Identity --> Shared
-    Catalog --> Shared
-    Webhooks --> Shared
-    Notifications --> Shared
 ```
 
 ---

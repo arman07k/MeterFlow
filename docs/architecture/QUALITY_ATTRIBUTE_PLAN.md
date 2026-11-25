@@ -55,13 +55,13 @@ This document translates MeterFlow's five Quality Attributes (`QA1`–`QA5`, map
 
 ---
 
-## 3. Quantitative `k6` Load Suite (`C10`)
+## 3. Quantitative Benchmarks & `k6` Load Suite (`C10`)
 
-All `k6` workloads (`perf/k6/`) **must execute strictly against Local Docker Compose PostgreSQL**:
+All `k6` workloads (`perf/k6/`) **must execute strictly against Local Docker Compose PostgreSQL** (never against shared Supabase PostgreSQL). Full-scale PostgreSQL 17 Testcontainers benchmarks are also executable directly via Maven (`QaScaleBenchmarkIT` and `QaEngineeringValidationIT`; see [`docs/TESTING_AND_BENCHMARK_REPORT.md`](../TESTING_AND_BENCHMARK_REPORT.md)).
 
-| Planned `k6` Script | Scenario | Threshold Assertions | Requirements Verified |
+| Implemented `k6` Script / Benchmark | Scenario | Primary Assertions | Requirements Verified |
 | :--- | :--- | :--- | :--- |
-| `perf/k6/event-ingestion.js` | `100 VUs` sustained `60 s` posting single & `1,000`-event batch payloads across `500` subscriptions | `http_req_duration{name:ingest}: ['p(95)<200', 'p(99)<400']`, `http_req_failed: ['rate<0.005']` | `FR1`, `QA1`, `C10` |
-| `perf/k6/live-estimates-and-cached-reads.js` | `100 VUs` querying published `plan_versions`, dashboards, and live estimates while ingesting events | `p(95)<150` cached, `p(95)<250` estimate, Caffeine hit rate `>= 0.90`, freshness `< 60s` | `FR7`, `FR10`, `QA1`, `C7`, `C10` |
-| `perf/k6/idempotency-contention.js` | `50 VUs` firing identical `idempotency_key` (same & conflicting `payload_hash`) and identical payment keys (`10` repeats/VU) | `0` HTTP `500`s; `409` on conflicts; `1` row persisted per valid `idempotency_key` | `FR1`, `FR8`, `QA2`, `C10` |
-| `perf/k6/invoice-simulation.js` | `50 VUs` executing read-only `FR10` invoice simulations across all `6` charge types (`FLAT_FEE`..`PER_SEAT`) | `p(95)<200`; `0` rows added to `invoices` or `ledger_entries` | `FR3`, `FR10`, `QA1`, `QA2`, `C10` |
+| `perf/k6/qa1-one-million-reconciliation.js` | Deterministic `1,000,000`-event dataset (`95%` unique on-time, `3%` duplicates, `2%` valid late within `72h`) with independent mathematical sum/count reconciliation | `0` double counting; `POST /api/v1/metering/usage/query` & `/rollups/reconcile` match exact mathematical totals | `FR1`, `FR2`, `QA1`, `QA2`, `C10` |
+| `perf/k6/qa2-throughput-latency.js` | `constant-arrival-rate` batched ingestion against `POST /api/v1/events/batch` paired with Micrometer ingestion/rollup timers | Effective throughput & `http_req_duration` latency separated from DB/rollup latency | `FR1`, `QA1`, `QA5`, `C10` |
+| `perf/k6/qa3-restart-recovery.js` | Overlapping deterministic batches across a simulated `docker compose restart app`, retry with identical idempotency keys, and `/rollups/recover` + `/rollups/reconcile` | Duplicate-free recovery and exact post-restart aggregate parity | `FR1`, `QA2`, `C10` |
+| `QaScaleBenchmarkIT` (opt-in Maven IT) | Local PostgreSQL 17 Testcontainers full-scale verification (`1,000,000` unique + `30k` dup + `20k` late events; `10,000`-customer Spring Batch 6 run) | **Verified**: `16,586.5 events/sec`, batch-250 `p95=46 ms`, `0.00` paisa drift, `10,000` customers billed in `5m 42.2s` (`0` duplicates on re-run) | `QA1`, `QA2`, `QA5`, `C10` |

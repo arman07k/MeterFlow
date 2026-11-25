@@ -2,6 +2,21 @@
 FROM maven:3.9-eclipse-temurin-25-alpine AS builder
 WORKDIR /workspace
 
+# Route Maven Central through Google's official public mirror inside container builds
+# to avoid shared-IP HTTP 429 rate limits on cloud build runners (e.g., Render).
+RUN mkdir -p /root/.m2 && printf '%s\n' \
+    '<settings>' \
+    '  <mirrors>' \
+    '    <mirror>' \
+    '      <id>google-maven-central</id>' \
+    '      <name>Google Maven Central Mirror</name>' \
+    '      <url>https://maven-central.storage-download.googleapis.com/maven2</url>' \
+    '      <mirrorOf>central</mirrorOf>' \
+    '    </mirror>' \
+    '  </mirrors>' \
+    '</settings>' \
+    > /root/.m2/settings.xml
+
 COPY pom.xml ./
 RUN mvn -B -ntp dependency:go-offline
 

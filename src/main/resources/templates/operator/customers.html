@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Customer Management')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: operatorNav('customers')}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Customer Management</h1>
+            <p class="subtitle">Search, inspect, and provision customer accounts with immutable billing currencies.</p>
+        </div>
+        <form th:action="@{/operator/customers}" method="get" class="actions-row">
+            <input type="text" name="search" th:value="${search}" placeholder="Search name or external key"/>
+            <button type="submit" class="btn btn-secondary">Search</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Provision New Customer</h2>
+        <form th:action="@{/operator/customers}" method="post" class="form-grid">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <div class="form-field">
+                <label for="externalKey">External Key</label>
+                <input id="externalKey" name="externalKey" type="text" placeholder="acme-bd-001" required/>
+            </div>
+            <div class="form-field">
+                <label for="name">Customer Name</label>
+                <input id="name" name="name" type="text" placeholder="Acme Bangladesh Ltd." required/>
+            </div>
+            <div class="form-field">
+                <label for="currency">Billing Currency</label>
+                <select id="currency" name="currency" required>
+                    <option th:each="c : ${currencies}" th:value="${c}" th:text="${c}"></option>
+                </select>
+            </div>
+            <div><button type="submit" class="btn">Create Customer</button></div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Customers</h2>
+        <div th:if="${customersPage.isEmpty()}" class="empty-state">No customers match your filter.</div>
+        <div th:unless="${customersPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead><tr><th>External Key</th><th>Name</th><th>Currency</th><th>Status</th><th>Created</th><th>Action</th></tr></thead>
+                <tbody>
+                <tr th:each="c : ${customersPage.content}">
+                    <td class="mono" th:text="${c.externalKey}">key</td>
+                    <td th:text="${c.name}">Name</td>
+                    <td><span class="badge" th:text="${c.currency}">BDT</span></td>
+                    <td><span class="badge badge-success" th:text="${c.status}">ACTIVE</span></td>
+                    <td class="mono" th:text="${c.createdAt}">ts</td>
+                    <td><a class="btn btn-secondary btn-sm" th:href="@{/operator/customers/{id}(id=${c.id})}">Inspect 360°</a></td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="pagination">
+                <span th:text="'Page ' + (${customersPage.number} + 1) + ' of ' + ${customersPage.totalPages} + ' (' + ${customersPage.totalElements} + ' total)'"></span>
+                <div class="actions-row">
+                    <a th:if="${customersPage.hasPrevious()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/operator/customers(search=${search},page=${customersPage.number - 1})}">Previous</a>
+                    <a th:if="${customersPage.hasNext()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/operator/customers(search=${search},page=${customersPage.number + 1})}">Next</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,11 @@
+package com.meterflow.notifications.api;
+
+public enum NotificationType {
+    INVOICE_FINALIZED,
+    PAYMENT_SUCCEEDED,
+    PAYMENT_FAILED,
+    SUBSCRIPTION_SUSPENDED,
+    SUBSCRIPTION_REACTIVATED,
+    USAGE_THRESHOLD_REACHED,
+    CREDIT_NOTE_ISSUED
+}

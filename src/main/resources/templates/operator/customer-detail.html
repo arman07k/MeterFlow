@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Customer 360°')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: operatorNav('customers')}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1 th:text="${customer.name}">Customer</h1>
+            <p class="subtitle">
+                ID: <span class="mono" th:text="${customer.id}">uuid</span>
+                &middot; Key: <span class="mono" th:text="${customer.externalKey}">key</span>
+                &middot; Currency: <strong th:text="${customer.currency}">BDT</strong>
+            </p>
+        </div>
+        <a class="btn btn-secondary" th:href="@{/operator/customers}">Back to Customers</a>
+    </div>
+
+    <div class="grid grid-3">
+        <div class="card"><div class="kpi-label">Available Credits</div><div class="kpi-value" th:text="${creditBalance.availableBalance.formatted()}">0.00</div></div>
+        <div class="card"><div class="kpi-label">Subscriptions</div><div class="kpi-value" th:text="${#lists.size(subscriptions)}">0</div></div>
+        <div class="card"><div class="kpi-label">Webhook Endpoints</div><div class="kpi-value" th:text="${#lists.size(endpoints)}">0</div></div>
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Subscriptions</h2>
+            <div th:if="${#lists.isEmpty(subscriptions)}" class="empty-state">No subscriptions.</div>
+            <div th:unless="${#lists.isEmpty(subscriptions)}" class="table-wrap">
+                <table>
+                    <thead><tr><th>ID</th><th>Status</th><th>Seats</th><th>Period End</th></tr></thead>
+                    <tbody>
+                    <tr th:each="s : ${subscriptions}">
+                        <td class="mono" th:text="${s.id}">id</td>
+                        <td><span class="badge badge-info" th:text="${s.status}">ACTIVE</span></td>
+                        <td th:text="${s.seatQuantity}">1</td>
+                        <td class="mono" th:text="${s.currentPeriodEnd}">ts</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Invoices</h2>
+            <div th:if="${#lists.isEmpty(invoices)}" class="empty-state">No invoices.</div>
+            <div th:unless="${#lists.isEmpty(invoices)}" class="table-wrap">
+                <table>
+                    <thead><tr><th>Number</th><th>Status</th><th class="num">Total</th><th class="num">Due</th></tr></thead>
+                    <tbody>
+                    <tr th:each="inv : ${invoices}">
+                        <td class="mono" th:text="${inv.invoiceNumber != null ? inv.invoiceNumber : 'DRAFT'}">INV</td>
+                        <td><span class="badge badge-info" th:text="${inv.status}">FINALIZED</span></td>
+                        <td class="num" th:text="${inv.totalAmount.formatted()}">0.00</td>
+                        <td class="num" th:text="${inv.amountDue.formatted()}">0.00</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Payments</h2>
+            <div th:if="${#lists.isEmpty(payments)}" class="empty-state">No payments.</div>
+            <div th:unless="${#lists.isEmpty(payments)}" class="table-wrap">
+                <table>
+                    <thead><tr><th>Reference</th><th>Status</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                    <tr th:each="p : ${payments}">
+                        <td class="mono" th:text="${p.paymentReference}">PAY</td>
+                        <td><span class="badge" th:text="${p.status}">SUCCEEDED</span></td>
+                        <td class="num" th:text="${p.amount.formatted()}">0.00</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Webhook Endpoints</h2>
+            <div th:if="${#lists.isEmpty(endpoints)}" class="empty-state">No webhook endpoints.</div>
+            <div th:unless="${#lists.isEmpty(endpoints)}" class="table-wrap">
+                <table>
+                    <thead><tr><th>Name</th><th>URL</th><th>Status</th></tr></thead>
+                    <tbody>
+                    <tr th:each="ep : ${endpoints}">
+                        <td th:text="${ep.name}">Name</td>
+                        <td class="mono" th:text="${ep.targetUrl}">url</td>
+                        <td><span class="badge" th:text="${ep.active ? 'ACTIVE' : 'DISABLED'}">ACTIVE</span></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

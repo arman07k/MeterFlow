@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title th:text="${title} + ' — MeterFlow'">MeterFlow</title>
+    <link rel="stylesheet" th:href="@{/css/meterflow.css}"/>
+</head>
+<body>
+
+<header th:fragment="customerNav(activeTab, customer, unreadCount)" class="topbar">
+    <a class="topbar-brand" th:href="@{/customer/dashboard}">MeterFlow Customer Portal</a>
+    <nav class="topbar-nav">
+        <a th:href="@{/customer/dashboard(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'dashboard'} ? 'active'">Dashboard</a>
+        <a th:href="@{/customer/usage(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'usage'} ? 'active'">Usage</a>
+        <a th:href="@{/customer/subscription(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'subscription'} ? 'active'">Subscription</a>
+        <a th:href="@{/customer/invoices(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'invoices'} ? 'active'">Invoices</a>
+        <a th:href="@{/customer/payments(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'payments'} ? 'active'">Payments</a>
+        <a th:href="@{/customer/credits(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'credits'} ? 'active'">Credits</a>
+        <a th:href="@{/customer/notifications(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'notifications'} ? 'active'">
+            Notifications <span th:if="${unreadCount != null and unreadCount > 0}" class="badge badge-warn" th:text="${unreadCount}">0</span>
+        </a>
+        <a th:href="@{/customer/webhooks(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'webhooks'} ? 'active'">Webhooks</a>
+        <a th:href="@{/customer/simulation(customerId=${customer != null ? customer.id : null})}" th:classappend="${activeTab == 'simulation'} ? 'active'">Simulator</a>
+    </nav>
+    <div class="topbar-actions">
+        <span th:if="${customer != null}" th:text="${customer.name} + ' (' + ${customer.currency} + ')'">Customer</span>
+        <form th:action="@{/logout}" method="post" class="inline-form">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <button type="submit" class="btn btn-secondary btn-sm">Sign Out</button>
+        </form>
+    </div>
+</header>
+
+<header th:fragment="operatorNav(activeTab)" class="topbar">
+    <a class="topbar-brand" th:href="@{/operator/overview}">MeterFlow Operator Console</a>
+    <nav class="topbar-nav">
+        <a th:href="@{/operator/overview}" th:classappend="${activeTab == 'overview'} ? 'active'">Overview</a>
+        <a th:href="@{/operator/customers}" th:classappend="${activeTab == 'customers'} ? 'active'">Customers</a>
+        <a th:href="@{/operator/subscriptions}" th:classappend="${activeTab == 'subscriptions'} ? 'active'">Subscriptions</a>
+        <a th:href="@{/operator/billing}" th:classappend="${activeTab == 'billing'} ? 'active'">Billing &amp; Runs</a>
+        <a th:href="@{/operator/payments}" th:classappend="${activeTab == 'payments'} ? 'active'">Payments &amp; Dunning</a>
+        <a th:href="@{/operator/webhooks}" th:classappend="${activeTab == 'webhooks'} ? 'active'">Webhooks &amp; Audit</a>
+        <a th:href="@{/operator/catalog}" th:classappend="${activeTab == 'catalog'} ? 'active'">Catalogue</a>
+        <a th:href="@{/operator/simulation}" th:classappend="${activeTab == 'simulation'} ? 'active'">Historical Simulator</a>
+    </nav>
+    <div class="topbar-actions">
+        <a th:href="@{/swagger-ui.html}" class="btn btn-secondary btn-sm">OpenAPI</a>
+        <form th:action="@{/logout}" method="post" class="inline-form">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <button type="submit" class="btn btn-secondary btn-sm">Sign Out</button>
+        </form>
+    </div>
+</header>
+
+<div th:fragment="flashMessages">
+    <div th:if="${successMessage}" class="alert alert-success" th:text="${successMessage}"></div>
+    <div th:if="${errorMessage}" class="alert alert-error" th:text="${errorMessage}"></div>
+    <div th:if="${oneTimeSecret}" class="alert alert-warn">
+        <strong>One-Time Webhook Signing Secret — Copy Now!</strong>
+        This secret will never be displayed again by MeterFlow.
+        <div class="secret-box" th:text="${oneTimeSecret}">whsec_...</div>
+        <div th:if="${previousSecretExpiresAt}" class="kpi-note">
+            Previous signing secret remains valid during the dual-key grace window until
+            <span class="mono" th:text="${previousSecretExpiresAt}"></span>.
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

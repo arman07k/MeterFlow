@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Payments & Dunning')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('payments', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Payments &amp; Dunning Status</h1>
+            <p class="subtitle">Read-only ledger of payment attempts and dunning recovery status for your account.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Payment History</h2>
+        <div th:if="${paymentsPage.isEmpty()}" class="empty-state">No payment transactions recorded yet.</div>
+        <div th:unless="${paymentsPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Reference</th>
+                    <th>Status</th>
+                    <th class="num">Amount</th>
+                    <th>Attempts</th>
+                    <th>Failure Reason</th>
+                    <th>Created</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="p : ${paymentsPage.content}">
+                    <td class="mono" th:text="${p.paymentReference}">PAY</td>
+                    <td><span class="badge badge-info" th:text="${p.status}">SUCCEEDED</span></td>
+                    <td class="num" th:text="${p.amount.formatted()}">0.00</td>
+                    <td th:text="${p.attemptCount}">1</td>
+                    <td th:text="${p.failureReason != null ? p.failureReason : '—'}">—</td>
+                    <td class="mono" th:text="${p.createdAt}">ts</td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="pagination" th:if="${paymentsPage.totalPages > 1}">
+                <span th:text="'Page ' + (${paymentsPage.number} + 1) + ' of ' + ${paymentsPage.totalPages} + ' (' + ${paymentsPage.totalElements} + ' total)'"></span>
+                <div class="actions-row">
+                    <a th:if="${paymentsPage.hasPrevious()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/customer/payments(customerId=${customer.id},page=${paymentsPage.number - 1})}">Previous</a>
+                    <a th:if="${paymentsPage.hasNext()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/customer/payments(customerId=${customer.id},page=${paymentsPage.number + 1})}">Next</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Dunning Cases</h2>
+        <div th:if="${dunningPage.isEmpty()}" class="empty-state">No active or historical dunning cases.</div>
+        <div th:unless="${dunningPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Retries Completed</th>
+                    <th>Next Retry</th>
+                    <th>Suspension Date</th>
+                    <th>Updated</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="d : ${dunningPage.content}">
+                    <td><span class="badge badge-warn" th:text="${d.status}">RETRY_SCHEDULED</span></td>
+                    <td th:text="${d.retriesCompleted} + ' / ' + ${d.maxRetries}">0 / 3</td>
+                    <td class="mono" th:text="${d.nextRetryAt != null ? d.nextRetryAt : '—'}">—</td>
+                    <td class="mono" th:text="${d.suspensionAt != null ? d.suspensionAt : '—'}">—</td>
+                    <td class="mono" th:text="${d.updatedAt}">ts</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+</body>
+</html>

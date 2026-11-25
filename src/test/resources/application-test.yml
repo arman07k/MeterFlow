@@ -3,8 +3,8 @@ meterflow:
   scheduling:
     enabled: false
   security:
-    bootstrap:
-      enabled: true
-      admin-password: test-admin-password
-      operator-password: test-operator-password
-      customer-password: test-customer-password
+    bcrypt-strength: 10
+    bootstrap-admin:
+      enabled: false
+  webhooks:
+    allow-local-targets: true

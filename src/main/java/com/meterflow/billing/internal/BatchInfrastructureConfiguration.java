@@ -7,10 +7,9 @@ import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.core.task.TaskExecutor;
 
 /**
- * Spring Batch 6 foundation task executor configuration (ADR-005).
+ * Spring Batch 6 foundation task executor configuration (ADR-005, ADR-014).
  * Spring Boot 4's spring-boot-starter-batch-jdbc auto-configures the PostgreSQL
  * JobRepository and JobOperator against Flyway-managed BATCH_* tables.
- * Domain billing jobs are implemented in subsequent dedicated tasks.
  */
 @Configuration
 public class BatchInfrastructureConfiguration {

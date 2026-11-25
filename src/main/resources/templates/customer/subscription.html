@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Subscription')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('subscription', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Subscription Management</h1>
+            <p class="subtitle">Current plan version, billing period, scheduled changes, and self-service actions.</p>
+        </div>
+    </div>
+
+    <div class="card" th:if="${subscription == null}">
+        <div class="empty-state">No open subscription found for this account.</div>
+    </div>
+
+    <div class="card" th:if="${subscription != null}">
+        <h2>Active Subscription</h2>
+        <div class="grid grid-4">
+            <div><div class="kpi-label">Status</div><div class="kpi-value" th:text="${subscription.status}">ACTIVE</div></div>
+            <div><div class="kpi-label">Plan Version</div><div class="kpi-value" th:text="${planVersion != null ? planVersion.planCode + ' v' + planVersion.versionNumber : subscription.currentPlanVersionId}">PLAN</div></div>
+            <div><div class="kpi-label">Seats</div><div class="kpi-value" th:text="${subscription.seatQuantity}">1</div></div>
+            <div><div class="kpi-label">Cancel At Period End</div><div class="kpi-value" th:text="${subscription.cancelAtPeriodEnd ? 'YES' : 'NO'}">NO</div></div>
+        </div>
+        <p class="kpi-note">
+            Current Period: <span class="mono" th:text="${subscription.currentPeriodStart}"></span> to
+            <span class="mono" th:text="${subscription.currentPeriodEnd}"></span>
+            &middot; Timezone: <span class="mono" th:text="${subscription.billingTimezone}">UTC</span>
+        </p>
+
+        <div class="actions-row">
+            <form th:if="${subscription.status.name() == 'ACTIVE'}" th:action="@{/customer/subscription/pause}" method="post" class="inline-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <input type="hidden" name="customerId" th:value="${customer.id}"/>
+                <input type="hidden" name="subscriptionId" th:value="${subscription.id}"/>
+                <button type="submit" class="btn btn-secondary">Pause Subscription</button>
+            </form>
+            <form th:if="${subscription.status.name() == 'PAUSED'}" th:action="@{/customer/subscription/resume}" method="post" class="inline-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <input type="hidden" name="customerId" th:value="${customer.id}"/>
+                <input type="hidden" name="subscriptionId" th:value="${subscription.id}"/>
+                <button type="submit" class="btn">Resume Subscription</button>
+            </form>
+            <form th:if="${subscription.status.name() == 'ACTIVE' and !subscription.cancelAtPeriodEnd}"
+                  th:action="@{/customer/subscription/cancel-at-period-end}" method="post" class="inline-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <input type="hidden" name="customerId" th:value="${customer.id}"/>
+                <input type="hidden" name="subscriptionId" th:value="${subscription.id}"/>
+                <button type="submit" class="btn btn-danger">Cancel at Period End</button>
+            </form>
+            <form th:if="${history != null and !#lists.isEmpty(history.scheduledChanges)}"
+                  th:action="@{/customer/subscription/cancel-scheduled-change}" method="post" class="inline-form">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <input type="hidden" name="customerId" th:value="${customer.id}"/>
+                <input type="hidden" name="subscriptionId" th:value="${subscription.id}"/>
+                <button type="submit" class="btn btn-secondary">Cancel Scheduled Change</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card" th:if="${history != null and !#lists.isEmpty(history.scheduledChanges)}">
+        <h2>Scheduled Plan Changes</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Status</th><th>Target Plan Version</th><th>Target Seats</th><th>Effective At</th></tr></thead>
+                <tbody>
+                <tr th:each="sc : ${history.scheduledChanges}">
+                    <td><span class="badge badge-info" th:text="${sc.status}">PENDING</span></td>
+                    <td class="mono" th:text="${sc.targetPlanVersionId}">uuid</td>
+                    <td th:text="${sc.targetSeatQuantity}">1</td>
+                    <td class="mono" th:text="${sc.effectiveAt}">ts</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card" th:if="${history != null and !#lists.isEmpty(history.prorationRecords)}">
+        <h2>Proration Records</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Effective At</th><th>Policy</th><th class="num">Credit</th><th class="num">Debit</th><th class="num">Net</th></tr></thead>
+                <tbody>
+                <tr th:each="pr : ${history.prorationRecords}">
+                    <td class="mono" th:text="${pr.effectiveAt}">ts</td>
+                    <td th:text="${pr.calculationPolicy}">POLICY</td>
+                    <td class="num" th:text="${pr.creditAmount.formatted()}">0.00</td>
+                    <td class="num" th:text="${pr.debitAmount.formatted()}">0.00</td>
+                    <td class="num" th:text="${pr.netProrationAmount.formatted()}">0.00</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+</body>
+</html>

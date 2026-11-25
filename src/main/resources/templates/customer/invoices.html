@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Invoices')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('invoices', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Invoices</h1>
+            <p class="subtitle">Authoritative draft, finalized, paid, and voided billing invoices.</p>
+        </div>
+        <form th:action="@{/customer/invoices}" method="get" class="actions-row">
+            <input type="hidden" name="customerId" th:value="${customer.id}"/>
+            <select name="status">
+                <option value="">All Statuses</option>
+                <option th:each="st : ${statuses}" th:value="${st}" th:text="${st}"
+                        th:selected="${selectedStatus != null and selectedStatus == st}"></option>
+            </select>
+            <button type="submit" class="btn btn-secondary">Filter</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <div th:if="${invoicesPage.isEmpty()}" class="empty-state">No invoices found.</div>
+        <div th:unless="${invoicesPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Invoice Number</th>
+                    <th>Status</th>
+                    <th>Period</th>
+                    <th class="num">Subtotal</th>
+                    <th class="num">Tax</th>
+                    <th class="num">Total</th>
+                    <th class="num">Credits</th>
+                    <th class="num">Amount Due</th>
+                    <th>Action</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="inv : ${invoicesPage.content}">
+                    <td class="mono" th:text="${inv.invoiceNumber != null ? inv.invoiceNumber : 'DRAFT'}">INV</td>
+                    <td><span class="badge badge-info" th:text="${inv.status}">FINALIZED</span></td>
+                    <td class="mono" th:text="${inv.periodStart} + ' → ' + ${inv.periodEnd}">period</td>
+                    <td class="num" th:text="${inv.subtotalAmount.formatted()}">0.00</td>
+                    <td class="num" th:text="${inv.taxAmount.formatted()}">0.00</td>
+                    <td class="num" th:text="${inv.totalAmount.formatted()}">0.00</td>
+                    <td class="num" th:text="${inv.creditsAppliedAmount.formatted()}">0.00</td>
+                    <td class="num"><strong th:text="${inv.amountDue.formatted()}">0.00</strong></td>
+                    <td><a class="btn btn-secondary btn-sm" th:href="@{/customer/invoices/{id}(id=${inv.id},customerId=${customer.id})}">Inspect</a></td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="pagination">
+                <span th:text="'Page ' + (${invoicesPage.number} + 1) + ' of ' + ${invoicesPage.totalPages}"></span>
+                <div class="actions-row">
+                    <a th:if="${invoicesPage.hasPrevious()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/customer/invoices(customerId=${customer.id},status=${selectedStatus},page=${invoicesPage.number - 1})}">Previous</a>
+                    <a th:if="${invoicesPage.hasNext()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/customer/invoices(customerId=${customer.id},status=${selectedStatus},page=${invoicesPage.number + 1})}">Next</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

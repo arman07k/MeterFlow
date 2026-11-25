@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Operator Overview')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: operatorNav('overview')}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Platform Operations Overview</h1>
+            <p class="subtitle">Live summary of customers, subscriptions, batch billing runs, dunning, and outbound webhook deliveries.</p>
+        </div>
+        <div class="actions-row">
+            <a class="btn btn-secondary" th:href="@{/actuator/health}">Actuator Health</a>
+            <a class="btn" th:href="@{/operator/billing}">Billing Operations</a>
+        </div>
+    </div>
+
+    <div class="grid grid-4">
+        <div class="card"><div class="kpi-label">Total Customers</div><div class="kpi-value" th:text="${customerCount}">0</div></div>
+        <div class="card"><div class="kpi-label">Active Subscriptions</div><div class="kpi-value" th:text="${subscriptionCounts.get(T(com.meterflow.subscriptions.api.SubscriptionStatus).ACTIVE)}">0</div></div>
+        <div class="card"><div class="kpi-label">Past-Due / Suspended</div>
+            <div class="kpi-value" th:text="${subscriptionCounts.get(T(com.meterflow.subscriptions.api.SubscriptionStatus).PAST_DUE) + subscriptionCounts.get(T(com.meterflow.subscriptions.api.SubscriptionStatus).SUSPENDED)}">0</div></div>
+        <div class="card"><div class="kpi-label">Webhooks Delivered / Exhausted</div>
+            <div class="kpi-value" th:text="${webhookCounts.get(T(com.meterflow.webhooks.api.WebhookDeliveryStatus).DELIVERED) + ' / ' + webhookCounts.get(T(com.meterflow.webhooks.api.WebhookDeliveryStatus).EXHAUSTED)}">0 / 0</div></div>
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Recent Billing Runs</h2>
+            <div th:if="${#lists.isEmpty(recentRuns)}" class="empty-state">No batch billing runs executed yet.</div>
+            <div th:unless="${#lists.isEmpty(recentRuns)}" class="table-wrap">
+                <table>
+                    <thead><tr><th>Type</th><th>Status</th><th class="num">Processed</th><th class="num">Failed</th><th>Started</th></tr></thead>
+                    <tbody>
+                    <tr th:each="run : ${recentRuns}">
+                        <td th:text="${run.runType}">DRAFT</td>
+                        <td><span class="badge badge-info" th:text="${run.status}">COMPLETED</span></td>
+                        <td class="num" th:text="${run.processedCount}">0</td>
+                        <td class="num" th:text="${run.failedCount}">0</td>
+                        <td class="mono" th:text="${run.startedAt}">ts</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Recent Invoices</h2>
+            <div th:if="${#lists.isEmpty(recentInvoices)}" class="empty-state">No invoices generated yet.</div>
+            <div th:unless="${#lists.isEmpty(recentInvoices)}" class="table-wrap">
+                <table>
+                    <thead><tr><th>Number</th><th>Status</th><th class="num">Total</th><th class="num">Due</th></tr></thead>
+                    <tbody>
+                    <tr th:each="inv : ${recentInvoices}">
+                        <td class="mono" th:text="${inv.invoiceNumber != null ? inv.invoiceNumber : 'DRAFT'}">INV</td>
+                        <td><span class="badge badge-info" th:text="${inv.status}">FINALIZED</span></td>
+                        <td class="num" th:text="${inv.totalAmount.formatted()}">0.00</td>
+                        <td class="num" th:text="${inv.amountDue.formatted()}">0.00</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Scheduled Dunning Cases</h2>
+        <div th:if="${#lists.isEmpty(activeDunning)}" class="empty-state">No scheduled dunning retries pending.</div>
+        <div th:unless="${#lists.isEmpty(activeDunning)}" class="table-wrap">
+            <table>
+                <thead><tr><th>Case ID</th><th>Invoice ID</th><th>Retries</th><th>Next Retry</th><th>Status</th></tr></thead>
+                <tbody>
+                <tr th:each="d : ${activeDunning}">
+                    <td class="mono" th:text="${d.id}">id</td>
+                    <td class="mono" th:text="${d.invoiceId}">inv</td>
+                    <td th:text="${d.retriesCompleted} + ' / ' + ${d.maxRetries}">1 / 3</td>
+                    <td class="mono" th:text="${d.nextRetryAt}">ts</td>
+                    <td><span class="badge badge-warn" th:text="${d.status}">RETRY_SCHEDULED</span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+</body>
+</html>

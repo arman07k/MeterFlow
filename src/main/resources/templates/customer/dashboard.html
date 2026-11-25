@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Customer Dashboard')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('dashboard', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+
+    <div class="page-header">
+        <div>
+            <h1 th:text="${customer.name}">Customer</h1>
+            <p class="subtitle">
+                Account Key: <span class="mono" th:text="${customer.externalKey}">cust</span>
+                &middot; Billing Currency: <strong th:text="${customer.currency}">BDT</strong>
+                &middot; Status: <span class="badge badge-info" th:text="${customer.status}">ACTIVE</span>
+            </p>
+        </div>
+        <div class="actions-row">
+            <a class="btn btn-secondary" th:href="@{/customer/simulation(customerId=${customer.id})}">Compare Plans</a>
+            <a class="btn" th:href="@{/customer/invoices(customerId=${customer.id})}">View Invoices</a>
+        </div>
+    </div>
+
+    <div class="grid grid-4">
+        <div class="card">
+            <div class="kpi-label">Subscription</div>
+            <div class="kpi-value" th:text="${subscription != null ? subscription.status : 'NONE'}">ACTIVE</div>
+            <div class="kpi-note" th:if="${planVersion != null}" th:text="${planVersion.planName} + ' v' + ${planVersion.versionNumber}">Plan</div>
+        </div>
+        <div class="card">
+            <div class="kpi-label">Current Period Live Estimate</div>
+            <div class="kpi-value" th:text="${liveEstimate != null ? liveEstimate.estimatedTotalAmount.formatted() : 'N/A'}">0.00</div>
+            <div class="kpi-note">Non-finalized real-time estimate</div>
+        </div>
+        <div class="card">
+            <div class="kpi-label">Available Prepaid Credits</div>
+            <div class="kpi-value" th:text="${creditBalance != null ? creditBalance.availableBalance.formatted() : '0.00'}">0.00</div>
+            <div class="kpi-note" th:text="${creditBalance != null ? creditBalance.activeGrantCount + ' active grant(s)' : ''}"></div>
+        </div>
+        <div class="card">
+            <div class="kpi-label">Unread Notifications</div>
+            <div class="kpi-value" th:text="${unreadCount}">0</div>
+            <div class="kpi-note"><a th:href="@{/customer/notifications(customerId=${customer.id})}">Open inbox</a></div>
+        </div>
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Recent Invoices</h2>
+            <div th:if="${#lists.isEmpty(recentInvoices)}" class="empty-state">No invoices generated yet.</div>
+            <div th:unless="${#lists.isEmpty(recentInvoices)}" class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Number</th>
+                        <th>Status</th>
+                        <th class="num">Total</th>
+                        <th class="num">Due</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="inv : ${recentInvoices}">
+                        <td>
+                            <a th:href="@{/customer/invoices/{id}(id=${inv.id},customerId=${customer.id})}"
+                               th:text="${inv.invoiceNumber != null ? inv.invoiceNumber : 'DRAFT'}">INV</a>
+                        </td>
+                        <td><span class="badge badge-info" th:text="${inv.status}">FINALIZED</span></td>
+                        <td class="num" th:text="${inv.totalAmount.formatted()}">0.00</td>
+                        <td class="num" th:text="${inv.amountDue.formatted()}">0.00</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recent Payments</h2>
+            <div th:if="${#lists.isEmpty(recentPayments)}" class="empty-state">No payments recorded yet.</div>
+            <div th:unless="${#lists.isEmpty(recentPayments)}" class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Reference</th>
+                        <th>Status</th>
+                        <th class="num">Amount</th>
+                        <th>Recorded</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="p : ${recentPayments}">
+                        <td class="mono" th:text="${p.paymentReference}">PAY</td>
+                        <td><span class="badge badge-info" th:text="${p.status}">SUCCEEDED</span></td>
+                        <td class="num" th:text="${p.amount.formatted()}">0.00</td>
+                        <td class="mono" th:text="${p.createdAt}">now</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Recent Notifications</h2>
+        <div th:if="${#lists.isEmpty(recentNotifications)}" class="empty-state">No notifications yet.</div>
+        <div th:unless="${#lists.isEmpty(recentNotifications)}" class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Title</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="n : ${recentNotifications}">
+                    <td><span class="badge" th:text="${n.type}">INFO</span></td>
+                    <td th:text="${n.title}">Title</td>
+                    <td th:text="${n.message}">Message</td>
+                    <td><span class="badge" th:classappend="${n.read} ? '' : 'badge-warn'" th:text="${n.read ? 'READ' : 'UNREAD'}">UNREAD</span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+</body>
+</html>

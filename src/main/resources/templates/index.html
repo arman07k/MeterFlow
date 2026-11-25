@@ -1,18 +1,52 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MeterFlow Foundation</title>
-</head>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Platform Home')}"></head>
 <body>
-<main>
-    <h1>MeterFlow</h1>
-    <p>Usage-Based Metering, Subscription Rating, Invoicing, Dunning, and Webhook Platform — Foundation Bootstrap Active.</p>
-    <nav>
-        <a th:href="@{/login}">Sign In</a> |
-        <a th:href="@{/actuator/health}">Health Status</a>
+<header class="topbar">
+    <a class="topbar-brand" th:href="@{/}">MeterFlow</a>
+    <nav class="topbar-nav">
+        <a th:href="@{/customer/dashboard}">Customer Portal</a>
+        <a th:href="@{/operator/overview}">Operator Console</a>
+        <a th:href="@{/actuator/health}">System Health</a>
+        <a th:href="@{/login}">Sign In</a>
     </nav>
+</header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="card">
+        <h1>MeterFlow — Usage-Based Billing &amp; Metering Platform</h1>
+        <p class="subtitle">
+            Deterministic metering, versioned pricing, subscription proration, immutable invoicing,
+            payments &amp; dunning, HMAC-signed webhooks, and read-only historical invoice simulation.
+        </p>
+    </div>
+
+    <div class="grid grid-3">
+        <div class="card">
+            <h2>Customer Portal</h2>
+            <p class="subtitle">
+                View real-time usage estimates, manage subscriptions, inspect finalized invoices,
+                track credits and notifications, configure webhooks, and simulate alternative published plans.
+            </p>
+            <p><a class="btn" th:href="@{/customer/dashboard}">Open Customer Portal</a></p>
+        </div>
+        <div class="card">
+            <h2>Admin &amp; Operator Console</h2>
+            <p class="subtitle">
+                Search customers, operate batch billing runs, manage tax policies and credit grants,
+                execute mock payments and dunning retries, inspect webhooks, and publish pricing plans.
+            </p>
+            <p><a class="btn" th:href="@{/operator/overview}">Open Operator Console</a></p>
+        </div>
+        <div class="card">
+            <h2>Sign In &amp; API Access</h2>
+            <p class="subtitle">
+                Sign in with database-backed BCrypt credentials or access the versioned
+                <code>/api/v1/**</code> REST API with HTTP Basic authentication and RFC 9457 error responses.
+            </p>
+            <p><a class="btn btn-secondary" th:href="@{/login}">Sign In</a></p>
+        </div>
+    </div>
 </main>
 </body>
 </html>

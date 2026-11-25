@@ -1,5 +1,6 @@
 package com.meterflow.portal.internal;
 
+import com.meterflow.shared.CorrelationIds;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,8 +20,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
-    public static final String CORRELATION_HEADER = "X-Correlation-Id";
-    public static final String MDC_KEY = "correlationId";
+    public static final String CORRELATION_HEADER = CorrelationIds.HEADER_NAME;
+    public static final String MDC_KEY = CorrelationIds.MDC_KEY;
 
     @Override
     protected void doFilterInternal(

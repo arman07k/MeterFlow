@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Webhooks')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('webhooks', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Outbound Webhooks</h1>
+            <p class="subtitle">Manage HMAC-SHA256 signed webhook endpoints, rotate signing secrets with a 24h dual-key window, and inspect delivery attempts.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Register Webhook Endpoint</h2>
+        <form th:action="@{/customer/webhooks/endpoints}" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <input type="hidden" name="customerId" th:value="${customer.id}"/>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="name">Endpoint Name</label>
+                    <input id="name" name="name" type="text" placeholder="Production Billing Listener" required/>
+                </div>
+                <div class="form-field">
+                    <label for="targetUrl">Target URL</label>
+                    <input id="targetUrl" name="targetUrl" type="url" placeholder="https://hooks.example.com/meterflow" required/>
+                </div>
+            </div>
+            <div class="form-field">
+                <label>Subscribed Events</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-item" th:each="ev : ${supportedEvents}">
+                        <input type="checkbox" name="subscribedEvents" th:value="${ev}"/>
+                        <span class="mono" th:text="${ev}">invoice.finalised</span>
+                    </label>
+                </div>
+            </div>
+            <button type="submit" class="btn">Register Endpoint &amp; Generate Secret</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Registered Endpoints</h2>
+        <div th:if="${#lists.isEmpty(endpoints)}" class="empty-state">No webhook endpoints registered yet.</div>
+        <div th:unless="${#lists.isEmpty(endpoints)}" class="table-wrap">
+            <table>
+                <thead><tr><th>Name</th><th>Target URL</th><th>Events</th><th>Secret Prefix</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                <tr th:each="ep : ${endpoints}">
+                    <td th:text="${ep.name}">Name</td>
+                    <td class="mono" th:text="${ep.targetUrl}">https://...</td>
+                    <td class="mono" th:text="${#strings.listJoin(ep.subscribedEvents, ', ')}">events</td>
+                    <td>
+                        <span class="mono" th:text="${ep.secretPrefix}">whsec_...</span>
+                        <span th:if="${ep.dualKeyGraceActive}" class="badge badge-warn">Dual-Key Grace</span>
+                    </td>
+                    <td><span class="badge" th:classappend="${ep.active} ? 'badge-success' : 'badge-danger'" th:text="${ep.active ? 'ACTIVE' : 'DISABLED'}">ACTIVE</span></td>
+                    <td>
+                        <div class="actions-row">
+                            <form th:action="@{/customer/webhooks/endpoints/{id}/toggle(id=${ep.id})}" method="post" class="inline-form">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                <input type="hidden" name="customerId" th:value="${customer.id}"/>
+                                <input type="hidden" name="active" th:value="${!ep.active}"/>
+                                <button type="submit" class="btn btn-secondary btn-sm" th:text="${ep.active ? 'Disable' : 'Enable'}">Toggle</button>
+                            </form>
+                            <form th:action="@{/customer/webhooks/endpoints/{id}/rotate-secret(id=${ep.id})}" method="post" class="inline-form">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                <input type="hidden" name="customerId" th:value="${customer.id}"/>
+                                <button type="submit" class="btn btn-secondary btn-sm">Rotate Secret</button>
+                            </form>
+                            <form th:action="@{/customer/webhooks/endpoints/{id}/delete(id=${ep.id})}" method="post" class="inline-form">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                <input type="hidden" name="customerId" th:value="${customer.id}"/>
+                                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Webhook Delivery Logs</h2>
+        <div th:if="${deliveriesPage.isEmpty()}" class="empty-state">No webhook deliveries recorded yet.</div>
+        <div th:unless="${deliveriesPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead><tr><th>Event Type</th><th>Status</th><th>Attempts</th><th>Last HTTP</th><th>Created</th><th>Action</th></tr></thead>
+                <tbody>
+                <tr th:each="d : ${deliveriesPage.content}">
+                    <td class="mono" th:text="${d.eventType}">invoice.finalised</td>
+                    <td><span class="badge badge-info" th:text="${d.status}">DELIVERED</span></td>
+                    <td th:text="${d.attemptCount} + ' / ' + ${d.maxAttempts}">1 / 6</td>
+                    <td th:text="${d.lastHttpStatus != null ? d.lastHttpStatus : '—'}">—</td>
+                    <td class="mono" th:text="${d.createdAt}">ts</td>
+                    <td><a class="btn btn-secondary btn-sm" th:href="@{/customer/webhooks/deliveries/{id}(id=${d.id},customerId=${customer.id})}">Inspect &amp; Replay</a></td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="pagination" th:if="${deliveriesPage.totalPages > 1}">
+                <span th:text="'Page ' + (${deliveriesPage.number} + 1) + ' of ' + ${deliveriesPage.totalPages} + ' (' + ${deliveriesPage.totalElements} + ' total)'"></span>
+                <div class="actions-row">
+                    <a th:if="${deliveriesPage.hasPrevious()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/customer/webhooks(customerId=${customer.id},page=${deliveriesPage.number - 1})}">Previous</a>
+                    <a th:if="${deliveriesPage.hasNext()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/customer/webhooks(customerId=${customer.id},page=${deliveriesPage.number + 1})}">Next</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

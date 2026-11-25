@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Webhooks & Audit Logs')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: operatorNav('webhooks')}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Outbound Webhooks &amp; Operational Audit Trail</h1>
+            <p class="subtitle">Monitor endpoint subscriptions, trigger bounded due delivery dispatch, replay failed deliveries, and review immutable audit logs.</p>
+        </div>
+        <form th:action="@{/operator/webhooks/dispatch}" method="post" class="inline-form">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <button type="submit" class="btn">Dispatch Due Deliveries</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Webhook Deliveries</h2>
+        <div th:if="${deliveriesPage.isEmpty()}" class="empty-state">No webhook deliveries queued yet.</div>
+        <div th:unless="${deliveriesPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead><tr><th>Event</th><th>Status</th><th>Attempts</th><th>Last HTTP</th><th>Error</th><th>Action</th></tr></thead>
+                <tbody>
+                <tr th:each="d : ${deliveriesPage.content}">
+                    <td class="mono" th:text="${d.eventType}">invoice.finalised</td>
+                    <td><span class="badge badge-info" th:text="${d.status}">DELIVERED</span></td>
+                    <td th:text="${d.attemptCount} + ' / ' + ${d.maxAttempts}">1 / 6</td>
+                    <td th:text="${d.lastHttpStatus != null ? d.lastHttpStatus : '—'}">—</td>
+                    <td th:text="${d.lastErrorReason != null ? d.lastErrorReason : '—'}">—</td>
+                    <td>
+                        <form th:action="@{/operator/webhooks/deliveries/{id}/replay(id=${d.id})}" method="post" class="inline-form">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <button type="submit" class="btn btn-secondary btn-sm">Replay</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="pagination" th:if="${deliveriesPage.totalPages > 1}">
+                <span th:text="'Page ' + (${deliveriesPage.number} + 1) + ' of ' + ${deliveriesPage.totalPages} + ' (' + ${deliveriesPage.totalElements} + ' total)'"></span>
+                <div class="actions-row">
+                    <a th:if="${deliveriesPage.hasPrevious()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/operator/webhooks(status=${selectedStatus},page=${deliveriesPage.number - 1})}">Previous</a>
+                    <a th:if="${deliveriesPage.hasNext()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/operator/webhooks(status=${selectedStatus},page=${deliveriesPage.number + 1})}">Next</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Registered Webhook Endpoints</h2>
+        <div th:if="${endpointsPage.isEmpty()}" class="empty-state">No webhook endpoints registered.</div>
+        <div th:unless="${endpointsPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead><tr><th>Name</th><th>Customer</th><th>Target URL</th><th>Events</th><th>Secret Prefix</th><th>Status</th></tr></thead>
+                <tbody>
+                <tr th:each="ep : ${endpointsPage.content}">
+                    <td th:text="${ep.name}">Name</td>
+                    <td class="mono" th:text="${ep.customerId}">cust</td>
+                    <td class="mono" th:text="${ep.targetUrl}">url</td>
+                    <td class="mono" th:text="${#strings.listJoin(ep.subscribedEvents, ', ')}">events</td>
+                    <td class="mono" th:text="${ep.secretPrefix}">whsec_...</td>
+                    <td><span class="badge" th:text="${ep.active ? 'ACTIVE' : 'DISABLED'}">ACTIVE</span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Immutable Audit Log</h2>
+        <div th:if="${auditLogsPage.isEmpty()}" class="empty-state">No audit log records yet.</div>
+        <div th:unless="${auditLogsPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead><tr><th>Occurred At</th><th>Actor</th><th>Action</th><th>Resource</th><th>Details</th></tr></thead>
+                <tbody>
+                <tr th:each="a : ${auditLogsPage.content}">
+                    <td class="mono" th:text="${a.occurredAt}">ts</td>
+                    <td th:text="${a.actorEmail != null ? a.actorEmail : a.actorUserId}">actor</td>
+                    <td><span class="badge badge-warn" th:text="${a.action}">ACTION</span></td>
+                    <td class="mono" th:text="${a.resourceType + ':' + a.resourceId}">res</td>
+                    <td class="mono" th:text="${a.details}">{}</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+</body>
+</html>

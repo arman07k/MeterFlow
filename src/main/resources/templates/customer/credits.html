@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Prepaid Credits & Credit Notes')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('credits', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Prepaid Credits &amp; Credit Notes</h1>
+            <p class="subtitle">Available credit balance, grant expiration schedule, ledger transactions, and issued credit notes.</p>
+        </div>
+    </div>
+
+    <div class="grid grid-3">
+        <div class="card"><div class="kpi-label">Available Credit Balance</div><div class="kpi-value" th:text="${balance.availableBalance.formatted()}">0.00</div></div>
+        <div class="card"><div class="kpi-label">Active Grants</div><div class="kpi-value" th:text="${balance.activeGrantCount}">0</div></div>
+        <div class="card"><div class="kpi-label">Issued Credit Notes</div><div class="kpi-value" th:text="${#lists.size(creditNotes)}">0</div></div>
+    </div>
+
+    <div class="card">
+        <h2>Credit Grants</h2>
+        <div th:if="${#lists.isEmpty(grants)}" class="empty-state">No prepaid credit grants on this account.</div>
+        <div th:unless="${#lists.isEmpty(grants)}" class="table-wrap">
+            <table>
+                <thead><tr><th>Type</th><th>Description</th><th>Status</th><th class="num">Original</th><th class="num">Remaining</th><th>Expires At</th></tr></thead>
+                <tbody>
+                <tr th:each="g : ${grants}">
+                    <td th:text="${g.grantType}">PREPAID</td>
+                    <td th:text="${g.description}">Desc</td>
+                    <td><span class="badge badge-info" th:text="${g.status}">ACTIVE</span></td>
+                    <td class="num" th:text="${g.originalAmount.formatted()}">0.00</td>
+                    <td class="num"><strong th:text="${g.remainingAmount.formatted()}">0.00</strong></td>
+                    <td class="mono" th:text="${g.expiresAt != null ? g.expiresAt : 'No expiry'}">Never</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Credit Ledger Transactions</h2>
+        <div th:if="${#lists.isEmpty(transactions)}" class="empty-state">No credit ledger transactions recorded.</div>
+        <div th:unless="${#lists.isEmpty(transactions)}" class="table-wrap">
+            <table>
+                <thead><tr><th>Type</th><th>Description</th><th class="num">Amount</th><th class="num">Balance After</th><th>Timestamp</th></tr></thead>
+                <tbody>
+                <tr th:each="tx : ${transactions}">
+                    <td><span class="badge" th:text="${tx.transactionType}">CONSUME</span></td>
+                    <td th:text="${tx.description}">Desc</td>
+                    <td class="num" th:text="${tx.amount.formatted()}">0.00</td>
+                    <td class="num" th:text="${tx.balanceAfter.formatted()}">0.00</td>
+                    <td class="mono" th:text="${tx.createdAt}">ts</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+</body>
+</html>

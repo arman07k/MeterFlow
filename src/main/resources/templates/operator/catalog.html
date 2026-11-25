@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Catalogue Operations')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: operatorNav('catalog')}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Pricing Catalogue &amp; Billable Metrics</h1>
+            <p class="subtitle">Inspect billable metrics and immutable plan versions; publish drafts or clone versions into new drafts.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Billable Metrics</h2>
+        <div th:if="${#lists.isEmpty(metrics)}" class="empty-state">No billable metrics configured.</div>
+        <div th:unless="${#lists.isEmpty(metrics)}" class="table-wrap">
+            <table>
+                <thead><tr><th>Metric Key</th><th>Name</th><th>Aggregation</th><th>Target Property</th><th>Status</th></tr></thead>
+                <tbody>
+                <tr th:each="m : ${metrics}">
+                    <td class="mono" th:text="${m.metricKey}">key</td>
+                    <td th:text="${m.name}">Name</td>
+                    <td><span class="badge" th:text="${m.aggregationType}">COUNT</span></td>
+                    <td class="mono" th:text="${m.targetProperty != null ? m.targetProperty : '—'}">—</td>
+                    <td><span class="badge" th:classappend="${m.active} ? 'badge-success' : 'badge-danger'" th:text="${m.active ? 'ACTIVE' : 'INACTIVE'}">ACTIVE</span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Pricing Plan Versions</h2>
+        <div th:if="${#lists.isEmpty(planVersions)}" class="empty-state">No pricing plan versions created yet.</div>
+        <div th:unless="${#lists.isEmpty(planVersions)}" class="table-wrap">
+            <table>
+                <thead><tr><th>Plan</th><th>Version</th><th>Currency</th><th>Status</th><th>Charges</th><th>Actions</th></tr></thead>
+                <tbody>
+                <tr th:each="pv : ${planVersions}">
+                    <td th:text="${pv.planName + ' (' + pv.planCode + ')'}">Plan</td>
+                    <td th:text="'v' + ${pv.versionNumber}">v1</td>
+                    <td><span class="badge" th:text="${pv.currency}">BDT</span></td>
+                    <td><span class="badge" th:classappend="${pv.status.name() == 'PUBLISHED'} ? 'badge-success' : 'badge-warn'" th:text="${pv.status}">PUBLISHED</span></td>
+                    <td th:text="${#lists.size(pv.charges)} + ' charge(s)'">1</td>
+                    <td>
+                        <div class="actions-row">
+                            <form th:if="${pv.status.name() == 'DRAFT'}" th:action="@{/operator/catalog/versions/{id}/publish(id=${pv.id})}" method="post" class="inline-form">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                <button type="submit" class="btn btn-sm">Publish</button>
+                            </form>
+                            <form th:action="@{/operator/catalog/versions/{id}/clone(id=${pv.id})}" method="post" class="inline-form">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                <button type="submit" class="btn btn-secondary btn-sm">Clone to Draft</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+</body>
+</html>

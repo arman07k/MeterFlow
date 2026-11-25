@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Invoice Detail')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('invoices', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1 th:text="${invoiceDetail.invoice.invoiceNumber != null ? invoiceDetail.invoice.invoiceNumber : 'Draft Invoice'}">INV</h1>
+            <p class="subtitle">
+                Status: <span class="badge badge-info" th:text="${invoiceDetail.invoice.status}">FINALIZED</span>
+                &middot; Period: <span class="mono" th:text="${invoiceDetail.invoice.periodStart} + ' → ' + ${invoiceDetail.invoice.periodEnd}"></span>
+            </p>
+        </div>
+        <div class="actions-row">
+            <a class="btn btn-secondary" th:href="@{/customer/invoices(customerId=${customer.id})}">Back to Invoices</a>
+            <a class="btn" th:href="@{/customer/simulation(customerId=${customer.id})}">Simulate Alternative Plan</a>
+        </div>
+    </div>
+
+    <div class="grid grid-4">
+        <div class="card"><div class="kpi-label">Subtotal</div><div class="kpi-value" th:text="${invoiceDetail.invoice.subtotalAmount.formatted()}">0.00</div></div>
+        <div class="card"><div class="kpi-label">Tax</div><div class="kpi-value" th:text="${invoiceDetail.invoice.taxAmount.formatted()}">0.00</div></div>
+        <div class="card"><div class="kpi-label">Total</div><div class="kpi-value" th:text="${invoiceDetail.invoice.totalAmount.formatted()}">0.00</div></div>
+        <div class="card"><div class="kpi-label">Amount Due</div><div class="kpi-value" th:text="${invoiceDetail.invoice.amountDue.formatted()}">0.00</div>
+            <div class="kpi-note" th:text="'Credits Applied: ' + ${invoiceDetail.invoice.creditsAppliedAmount.formatted()}"></div></div>
+    </div>
+
+    <div class="card">
+        <h2>Invoice Line Items &amp; Provenance</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                    <th class="num">Raw Qty</th>
+                    <th class="num">Allowance</th>
+                    <th class="num">Billable Qty</th>
+                    <th class="num">Amount</th>
+                    <th>Provenance</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="line : ${invoiceDetail.lines}">
+                    <td th:text="${line.lineOrder}">1</td>
+                    <td><span class="badge" th:text="${line.lineType}">USAGE</span></td>
+                    <td th:text="${line.description}">Desc</td>
+                    <td class="num" th:text="${line.rawQuantity}">0</td>
+                    <td class="num" th:text="${line.freeAllowanceQuantity}">0</td>
+                    <td class="num" th:text="${line.billableQuantity}">0</td>
+                    <td class="num"><strong th:text="${line.lineAmount.formatted()}">0.00</strong></td>
+                    <td class="mono" th:text="${line.calculationBreakdown}">{}</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card" th:unless="${#lists.isEmpty(invoiceDetail.taxLines)}">
+        <h2>Tax Breakdown</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Tax Name</th><th>Jurisdiction</th><th class="num">Taxable</th><th class="num">Rate %</th><th class="num">Tax Amount</th></tr></thead>
+                <tbody>
+                <tr th:each="tax : ${invoiceDetail.taxLines}">
+                    <td th:text="${tax.taxName}">VAT</td>
+                    <td th:text="${tax.jurisdiction}">BD</td>
+                    <td class="num" th:text="${tax.taxableAmount.formatted()}">0.00</td>
+                    <td class="num" th:text="${tax.ratePercent} + '%'">15%</td>
+                    <td class="num" th:text="${tax.taxAmount.formatted()}">0.00</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="grid grid-2">
+        <div class="card">
+            <h2>Credit Notes</h2>
+            <div th:if="${#lists.isEmpty(creditNotes)}" class="empty-state">No credit notes linked to this invoice.</div>
+            <div th:unless="${#lists.isEmpty(creditNotes)}" class="table-wrap">
+                <table>
+                    <thead><tr><th>Number</th><th>Type</th><th>Reason</th><th class="num">Total Credit</th></tr></thead>
+                    <tbody>
+                    <tr th:each="cn : ${creditNotes}">
+                        <td class="mono" th:text="${cn.creditNoteNumber}">CN</td>
+                        <td th:text="${cn.creditType}">PARTIAL</td>
+                        <td th:text="${cn.reason}">Reason</td>
+                        <td class="num" th:text="${cn.totalCredit.formatted()}">0.00</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Payments</h2>
+            <div th:if="${#lists.isEmpty(payments)}" class="empty-state">No payments recorded for this invoice.</div>
+            <div th:unless="${#lists.isEmpty(payments)}" class="table-wrap">
+                <table>
+                    <thead><tr><th>Reference</th><th>Status</th><th class="num">Amount</th><th>Attempts</th></tr></thead>
+                    <tbody>
+                    <tr th:each="p : ${payments}">
+                        <td class="mono" th:text="${p.paymentReference}">PAY</td>
+                        <td><span class="badge badge-info" th:text="${p.status}">SUCCEEDED</span></td>
+                        <td class="num" th:text="${p.amount.formatted()}">0.00</td>
+                        <td th:text="${p.attemptCount}">1</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

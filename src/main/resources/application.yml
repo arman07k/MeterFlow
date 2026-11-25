@@ -38,6 +38,11 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
 
 management:
   endpoints:
@@ -79,10 +84,29 @@ meterflow:
   scheduling:
     enabled: true
   security:
-    bootstrap:
-      enabled: false
+    bcrypt-strength: 12
+    bootstrap-admin:
+      enabled: ${METERFLOW_BOOTSTRAP_ADMIN_ENABLED:false}
+      email: ${METERFLOW_BOOTSTRAP_ADMIN_EMAIL:}
+      full-name: ${METERFLOW_BOOTSTRAP_ADMIN_NAME:Platform Administrator}
+      password: ${METERFLOW_BOOTSTRAP_ADMIN_PASSWORD:}
   batch:
     concurrency-limit: 2
   outbox:
     retry-fixed-delay-ms: 15000
     retry-min-age-seconds: 10
+  subscriptions:
+    maintenance-fixed-delay-ms: 60000
+  payments:
+    mock:
+      default-outcome: SIMULATE_SUCCESS
+    dunning:
+      worker-fixed-delay-ms: 60000
+      batch-size: 50
+  webhooks:
+    encryption-key: ${WEBHOOK_SECRET_ENCRYPTION_KEY:}
+    allow-local-targets: ${METERFLOW_WEBHOOKS_ALLOW_LOCAL_TARGETS:false}
+    worker-fixed-delay-ms: 15000
+    batch-size: 50
+    timeout-ms: 5000
+    rotation-grace-hours: 24

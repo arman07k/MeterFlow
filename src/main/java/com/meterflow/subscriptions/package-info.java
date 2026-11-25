@@ -1,5 +1,5 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Subscriptions and Proration",
-        allowedDependencies = { "shared", "catalog :: api" }
+        allowedDependencies = { "shared", "identity :: api", "catalog :: api" }
 )
 package com.meterflow.subscriptions;

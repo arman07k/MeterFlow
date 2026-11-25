@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Staff Historical Invoice Simulator')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: operatorNav('simulation')}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Staff Historical Invoice &amp; Draft Plan Simulator</h1>
+            <p class="subtitle">Compare any customer's historical invoice against either DRAFT or PUBLISHED plan versions. Strictly read-only.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <form th:action="@{/operator/simulation}" method="post" class="form-grid">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <div class="form-field">
+                <label for="originalInvoiceId">Historical Invoice</label>
+                <select id="originalInvoiceId" name="originalInvoiceId" required>
+                    <option value="">Select invoice...</option>
+                    <option th:each="inv : ${invoices}" th:value="${inv.id}"
+                            th:text="${(inv.invoiceNumber != null ? inv.invoiceNumber : inv.id) + ' — ' + inv.totalAmount.formatted() + ' (' + inv.status + ')'}"
+                            th:selected="${selectedInvoiceId != null and selectedInvoiceId.equals(inv.id)}"></option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="targetPlanVersionId">Target Plan Version (Draft or Published)</label>
+                <select id="targetPlanVersionId" name="targetPlanVersionId" required>
+                    <option value="">Select plan version...</option>
+                    <option th:each="pv : ${planVersions}" th:value="${pv.id}"
+                            th:text="${pv.planCode + ' v' + pv.versionNumber + ' [' + pv.status + '] — ' + pv.currency}"
+                            th:selected="${selectedPlanVersionId != null and selectedPlanVersionId.equals(pv.id)}"></option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="seatQuantityOverride">Seat Override (optional)</label>
+                <input id="seatQuantityOverride" name="seatQuantityOverride" type="number" min="1" th:value="${seatQuantityOverride}"/>
+            </div>
+            <div><button type="submit" class="btn">Simulate Comparison</button></div>
+        </form>
+    </div>
+
+    <div th:if="${comparison != null}">
+        <div class="alert alert-info">
+            <strong>Non-Financial Simulation:</strong> <span th:text="${comparison.notice}">Notice</span>
+        </div>
+        <div class="grid grid-3">
+            <div class="card">
+                <div class="kpi-label">Original Total (<span th:text="${comparison.originalPlanLabel}">Orig</span>)</div>
+                <div class="kpi-value" th:text="${comparison.originalTotal.formatted()}">0.00</div>
+            </div>
+            <div class="card">
+                <div class="kpi-label">Simulated Total (<span th:text="${comparison.simulatedPlanLabel}">Sim</span>)</div>
+                <div class="kpi-value" th:text="${comparison.simulatedTotal.formatted()}">0.00</div>
+            </div>
+            <div class="card">
+                <div class="kpi-label">Net Delta</div>
+                <div class="kpi-value" th:text="${comparison.totalDelta.formatted()}">0.00</div>
+                <div class="kpi-note" th:if="${comparison.totalDeltaPercent != null}" th:text="${comparison.totalDeltaPercent} + '%'"></div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Simulated Charge Lines</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Charge</th><th>Type</th><th class="num">Raw Qty</th><th class="num">Allowance</th><th class="num">Billable</th><th class="num">Amount</th></tr></thead>
+                    <tbody>
+                    <tr th:each="line : ${comparison.simulatedLines}">
+                        <td th:text="${line.description}">Desc</td>
+                        <td th:text="${line.chargeType}">TYPE</td>
+                        <td class="num" th:text="${line.rawQuantity}">0</td>
+                        <td class="num" th:text="${line.freeAllowanceQuantity}">0</td>
+                        <td class="num" th:text="${line.billableQuantity}">0</td>
+                        <td class="num"><strong th:text="${line.amount.formatted()}">0.00</strong></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

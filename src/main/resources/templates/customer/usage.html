@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Usage & Estimates')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('usage', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Usage &amp; Live Spend Estimate</h1>
+            <p class="subtitle">Real-time unbilled usage estimates are clearly distinguished from finalized invoices.</p>
+        </div>
+    </div>
+
+    <div class="card" th:if="${liveEstimate != null}">
+        <h2>Current Period Live Estimate (Non-Finalized)</h2>
+        <div class="alert alert-info">
+            Period: <span class="mono" th:text="${liveEstimate.windowStart}"></span> to
+            <span class="mono" th:text="${liveEstimate.windowEnd}"></span>
+            &middot; Estimated Total: <strong th:text="${liveEstimate.estimatedTotalAmount.formatted()}">0.00</strong>
+            &middot; Computed At: <span class="mono" th:text="${liveEstimate.computedAt}"></span>
+        </div>
+        <div th:unless="${#lists.isEmpty(liveEstimate.metricEstimates)}" class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Metric Code</th>
+                    <th>Aggregation</th>
+                    <th class="num">Aggregated Quantity</th>
+                    <th class="num">Event Count</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="m : ${liveEstimate.metricEstimates}">
+                    <td class="mono" th:text="${m.metricKey}">api_calls</td>
+                    <td th:text="${m.aggregationType}">COUNT</td>
+                    <td class="num" th:text="${m.aggregatedQuantity}">0</td>
+                    <td class="num" th:text="${m.matchedEventCount}">0</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Filter Recorded Usage Events</h2>
+        <form th:action="@{/customer/usage}" method="get" class="form-grid">
+            <input type="hidden" name="customerId" th:value="${customer.id}"/>
+            <div class="form-field">
+                <label for="metricId">Billable Metric</label>
+                <select id="metricId" name="metricId">
+                    <option value="">All Metrics</option>
+                    <option th:each="m : ${metrics}" th:value="${m.id}" th:text="${m.name} + ' (' + ${m.metricKey} + ')'"
+                            th:selected="${selectedMetricId != null and selectedMetricId.equals(m.id)}"></option>
+                </select>
+            </div>
+            <div><button type="submit" class="btn">Apply Filter</button></div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Ingested Usage Events</h2>
+        <div th:if="${eventsPage.isEmpty()}" class="empty-state">No usage events recorded for this filter.</div>
+        <div th:unless="${eventsPage.isEmpty()}" class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>Idempotency Key</th>
+                    <th>Event Timestamp</th>
+                    <th class="num">Quantity</th>
+                    <th>Late Flag</th>
+                    <th>Ingested At</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="ev : ${eventsPage.content}">
+                    <td class="mono" th:text="${ev.idempotencyKey}">key</td>
+                    <td class="mono" th:text="${ev.eventTimestamp}">ts</td>
+                    <td class="num" th:text="${ev.quantity}">1</td>
+                    <td><span class="badge" th:classappend="${ev.lateEvent} ? 'badge-warn' : 'badge-success'"
+                              th:text="${ev.lateEvent ? 'LATE' : 'ON_TIME'}">ON_TIME</span></td>
+                    <td class="mono" th:text="${ev.ingestedAt}">ts</td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="pagination">
+                <span th:text="'Page ' + (${eventsPage.number} + 1) + ' of ' + ${eventsPage.totalPages} + ' (' + ${eventsPage.totalElements} + ' total)'"></span>
+                <div class="actions-row">
+                    <a th:if="${eventsPage.hasPrevious()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/customer/usage(customerId=${customer.id},metricId=${selectedMetricId},page=${eventsPage.number - 1})}">Previous</a>
+                    <a th:if="${eventsPage.hasNext()}" class="btn btn-secondary btn-sm"
+                       th:href="@{/customer/usage(customerId=${customer.id},metricId=${selectedMetricId},page=${eventsPage.number + 1})}">Next</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

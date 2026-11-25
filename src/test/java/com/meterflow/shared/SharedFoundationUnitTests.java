@@ -22,18 +22,18 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
 class SharedFoundationUnitTests {
 
     @Test
-    void moneyEnforcesFourDecimalHalfUpRoundingAndCurrencyMatching() {
-        Money roundedUp = Money.of(new BigDecimal("10.12345"), "usd");
-        Money roundedDown = Money.of(new BigDecimal("10.12344"), "USD");
+    void moneyEnforcesExplicitPersistedRoundingAndSupportedCurrencyMatching() {
+        Money roundedUp = Money.of(new BigDecimal("10.12345"), "usd").roundToPersisted();
+        Money roundedDown = Money.of(new BigDecimal("10.12344"), "USD").roundToPersisted();
 
         assertThat(roundedUp.currencyCode()).isEqualTo("USD");
         assertThat(roundedUp.amount()).isEqualByComparingTo("10.1235");
         assertThat(roundedDown.amount()).isEqualByComparingTo("10.1234");
         assertThat(roundedUp.add(roundedDown).amount()).isEqualByComparingTo("20.2469");
 
-        Money eur = Money.of(new BigDecimal("5.00"), "EUR");
-        assertThatThrownBy(() -> roundedUp.add(eur))
-                .isInstanceOf(IllegalArgumentException.class)
+        Money bdt = Money.of(new BigDecimal("5.00"), "BDT");
+        assertThatThrownBy(() -> roundedUp.add(bdt))
+                .isInstanceOf(CurrencyMismatchException.class)
                 .hasMessageContaining("Currency mismatch");
     }
 

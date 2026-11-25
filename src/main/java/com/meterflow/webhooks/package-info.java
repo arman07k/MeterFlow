@@ -1,5 +1,5 @@
 @org.springframework.modulith.ApplicationModule(
-        displayName = "Outbound HMAC Webhooks",
-        allowedDependencies = { "shared" }
+        displayName = "Outbound Webhooks",
+        allowedDependencies = { "shared", "identity :: api", "billing :: api", "payments :: api", "metering :: api" }
 )
 package com.meterflow.webhooks;

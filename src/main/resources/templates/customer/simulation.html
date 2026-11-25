@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head('Historical Invoice Simulator')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: customerNav('simulation', ${customer}, ${unreadCount})}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div class="page-header">
+        <div>
+            <h1>Historical Invoice &amp; Plan Comparison Simulator</h1>
+            <p class="subtitle">Re-rate a historical invoice against any published plan version using identical historical usage. Strictly read-only.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <form th:action="@{/customer/simulation}" method="post" class="form-grid">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <input type="hidden" name="customerId" th:value="${customer.id}"/>
+            <div class="form-field">
+                <label for="originalInvoiceId">Historical Invoice</label>
+                <select id="originalInvoiceId" name="originalInvoiceId" required>
+                    <option value="">Select invoice...</option>
+                    <option th:each="inv : ${eligibleInvoices}" th:value="${inv.id}"
+                            th:text="${(inv.invoiceNumber != null ? inv.invoiceNumber : 'DRAFT') + ' — ' + inv.totalAmount.formatted() + ' (' + inv.status + ')'}"
+                            th:selected="${selectedInvoiceId != null and selectedInvoiceId.equals(inv.id)}"></option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="targetPlanVersionId">Alternative Published Plan Version</label>
+                <select id="targetPlanVersionId" name="targetPlanVersionId" required>
+                    <option value="">Select published plan version...</option>
+                    <option th:each="pv : ${publishedPlanVersions}" th:value="${pv.id}"
+                            th:text="${pv.planName + ' (' + pv.planCode + ' v' + pv.versionNumber + ' — ' + pv.currency + ')'}"
+                            th:selected="${selectedPlanVersionId != null and selectedPlanVersionId.equals(pv.id)}"></option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="seatQuantityOverride">Seat Override (optional)</label>
+                <input id="seatQuantityOverride" name="seatQuantityOverride" type="number" min="1" th:value="${seatQuantityOverride}"/>
+            </div>
+            <div><button type="submit" class="btn">Run Read-Only Comparison</button></div>
+        </form>
+    </div>
+
+    <div th:if="${comparison != null}">
+        <div class="alert alert-info">
+            <strong>Non-Financial Simulation:</strong> <span th:text="${comparison.notice}">Notice</span>
+        </div>
+
+        <div th:if="${!#lists.isEmpty(comparison.dataWarnings)}" class="alert alert-warn">
+            <strong>Data Notes:</strong>
+            <ul>
+                <li th:each="w : ${comparison.dataWarnings}" th:text="${w}">Warning</li>
+            </ul>
+        </div>
+
+        <div class="grid grid-3">
+            <div class="card">
+                <div class="kpi-label">Original Total (<span th:text="${comparison.originalPlanLabel}">Orig</span>)</div>
+                <div class="kpi-value" th:text="${comparison.originalTotal.formatted()}">0.00</div>
+                <div class="kpi-note" th:text="'Subtotal ' + ${comparison.originalSubtotal.formatted()} + ' + Tax ' + ${comparison.originalTaxTotal.formatted()}"></div>
+            </div>
+            <div class="card">
+                <div class="kpi-label">Simulated Total (<span th:text="${comparison.simulatedPlanLabel}">Sim</span>)</div>
+                <div class="kpi-value" th:text="${comparison.simulatedTotal.formatted()}">0.00</div>
+                <div class="kpi-note" th:text="'Subtotal ' + ${comparison.simulatedSubtotal.formatted()} + ' + Tax ' + ${comparison.simulatedTaxTotal.formatted()}"></div>
+            </div>
+            <div class="card">
+                <div class="kpi-label">Net Difference (Simulated − Original)</div>
+                <div class="kpi-value" th:text="${comparison.totalDelta.formatted()}">0.00</div>
+                <div class="kpi-note" th:if="${comparison.totalDeltaPercent != null}" th:text="${comparison.totalDeltaPercent} + '% change'"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Simulated Charge-Level Breakdown</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Charge</th>
+                        <th>Type</th>
+                        <th class="num">Raw Qty</th>
+                        <th class="num">Allowance</th>
+                        <th class="num">Billable Qty</th>
+                        <th class="num">Amount</th>
+                        <th>Notes</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="line : ${comparison.simulatedLines}">
+                        <td th:text="${line.description}">Desc</td>
+                        <td><span class="badge" th:text="${line.chargeType}">TYPE</span></td>
+                        <td class="num" th:text="${line.rawQuantity}">0</td>
+                        <td class="num" th:text="${line.freeAllowanceQuantity}">0</td>
+                        <td class="num" th:text="${line.billableQuantity}">0</td>
+                        <td class="num"><strong th:text="${line.amount.formatted()}">0.00</strong></td>
+                        <td th:text="${line.dataNote != null ? line.dataNote : '—'}">—</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+</body>
+</html>

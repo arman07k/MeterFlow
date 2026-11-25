@@ -164,11 +164,33 @@ class SecurityFoundationTests {
                 .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
                 .andExpect(header().string("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'"));
 
-        mockMvc.perform(get("/login"))
+        String loginHtml = mockMvc.perform(get("/login"))
                 .andExpect(status().isOk())
                 .andExpect(header().exists(CorrelationIdFilter.CORRELATION_HEADER))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Demo-Only Environment"))))
-                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("/js/demo-login.js"))));
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("/js/demo-login.js"))))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(loginHtml.split("name=\"_csrf\"", -1)).hasSize(2);
+
+        mockMvc.perform(get("/login?expired"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Your sign-in session expired")));
+
+        // Missing _csrf on POST /login must still return 403 Forbidden (CSRF enforced)
+        mockMvc.perform(post("/login")
+                        .param("username", "user@example.com")
+                        .param("password", "SomePassword#2026"))
+                .andExpect(status().isForbidden());
+
+        // Stale _csrf on an expired session redirects back to /login?expired without authenticating
+        mockMvc.perform(post("/login")
+                        .param("_csrf", "stale-expired-token")
+                        .param("username", "user@example.com")
+                        .param("password", "SomePassword#2026"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?expired"));
     }
 
     @Test

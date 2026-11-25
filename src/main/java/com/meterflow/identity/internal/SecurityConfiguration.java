@@ -2,6 +2,7 @@ package com.meterflow.identity.internal;
 
 import com.meterflow.identity.api.MeterFlowRoles;
 import com.meterflow.shared.CorrelationIds;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
@@ -20,10 +21,18 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandlerImpl;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
+import org.springframework.security.web.csrf.MissingCsrfTokenException;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
+import org.springframework.security.web.savedrequest.RequestCache;
+import org.springframework.security.web.savedrequest.SavedRequest;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -107,13 +116,17 @@ public class SecurityConfiguration {
     @Bean
     @Order(2)
     public SecurityFilterChain portalSecurityFilterChain(HttpSecurity http) throws Exception {
+        HttpSessionRequestCache requestCache = new HttpSessionRequestCache();
+        AccessDeniedHandlerImpl defaultAccessDeniedHandler = new AccessDeniedHandlerImpl();
+
         return http
                 .headers(headers -> configureSecurityHeaders(headers))
+                .requestCache(cache -> cache.requestCache(requestCache))
                 .sessionManagement(session -> session
                         .sessionFixation(fixation -> fixation.migrateSession())
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/actuator/health", "/actuator/health/**", "/actuator/info", "/css/**", "/js/**", "/error").permitAll()
+                        .requestMatchers("/", "/login", "/actuator/health", "/actuator/health/**", "/actuator/info", "/css/**", "/js/**", "/favicon.ico", "/error").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").hasAnyRole(MeterFlowRoles.ADMIN, MeterFlowRoles.OPERATOR)
                         .requestMatchers("/actuator/**").hasRole(MeterFlowRoles.ADMIN)
                         .requestMatchers("/admin/**").hasRole(MeterFlowRoles.ADMIN)
@@ -123,8 +136,26 @@ public class SecurityConfiguration {
                 )
                 .formLogin(form -> form
                         .loginPage("/login")
-                        .defaultSuccessUrl("/", false)
+                        .successHandler(roleAwareLoginSuccessHandler(requestCache))
                         .permitAll()
+                )
+                .exceptionHandling(exceptions -> exceptions
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            // Keep full CSRF protection: only redirect back to /login?expired when a browser submits
+                            // a stale _csrf token against an expired/restarted session (MissingCsrfTokenException).
+                            // Missing _csrf or invalid tokens against an active session still return HTTP 403.
+                            String requestPath = request.getRequestURI().substring(request.getContextPath().length());
+                            if (accessDeniedException instanceof MissingCsrfTokenException
+                                    && "/login".equals(requestPath)
+                                    && "POST".equalsIgnoreCase(request.getMethod())) {
+                                String submittedToken = request.getParameter("_csrf");
+                                if (submittedToken != null && !submittedToken.isBlank()) {
+                                    response.sendRedirect("/login?expired");
+                                    return;
+                                }
+                            }
+                            defaultAccessDeniedHandler.handle(request, response, accessDeniedException);
+                        })
                 )
                 .logout(logout -> logout
                         .invalidateHttpSession(true)
@@ -134,6 +165,56 @@ public class SecurityConfiguration {
                         .permitAll()
                 )
                 .build();
+    }
+
+    private static AuthenticationSuccessHandler roleAwareLoginSuccessHandler(RequestCache requestCache) {
+        SavedRequestAwareAuthenticationSuccessHandler delegate = new SavedRequestAwareAuthenticationSuccessHandler();
+        delegate.setDefaultTargetUrl("/");
+        delegate.setAlwaysUseDefaultTargetUrl(false);
+        delegate.setRequestCache(requestCache);
+
+        return (request, response, authentication) -> {
+            SavedRequest savedRequest = requestCache.getRequest(request, response);
+            if (savedRequest != null && !isSavedRequestCompatibleWithRole(savedRequest.getRedirectUrl(), authentication)) {
+                requestCache.removeRequest(request, response);
+            }
+            delegate.onAuthenticationSuccess(request, response, authentication);
+        };
+    }
+
+    private static boolean isSavedRequestCompatibleWithRole(String redirectUrl, Authentication authentication) {
+        if (redirectUrl == null || redirectUrl.isBlank()) {
+            return false;
+        }
+        String path;
+        try {
+            path = URI.create(redirectUrl).getPath();
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+        if (path == null || path.isBlank() || "/".equals(path)) {
+            return true;
+        }
+        boolean isAdmin = hasAuthority(authentication, MeterFlowRoles.ROLE_ADMIN);
+        boolean isOperator = hasAuthority(authentication, MeterFlowRoles.ROLE_OPERATOR);
+        boolean isCustomer = hasAuthority(authentication, MeterFlowRoles.ROLE_CUSTOMER);
+
+        if (path.startsWith("/customer/") || "/customer".equals(path)) {
+            return isCustomer;
+        }
+        if (path.startsWith("/admin/") || "/admin".equals(path) || path.startsWith("/actuator/")) {
+            return isAdmin;
+        }
+        if (path.startsWith("/operator/") || "/operator".equals(path)
+                || path.startsWith("/v3/api-docs") || path.startsWith("/swagger-ui")) {
+            return isAdmin || isOperator;
+        }
+        return !"/favicon.ico".equals(path);
+    }
+
+    private static boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(granted -> authority.equals(granted.getAuthority()));
     }
 
     private static void configureSecurityHeaders(

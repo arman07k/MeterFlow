@@ -116,12 +116,12 @@ class DemoAccountsIT {
         assertThat(subsBefore).isGreaterThanOrEqualTo(1L);
         assertThat(invoicesBefore).isGreaterThanOrEqualTo(1L);
 
-        // 3. Sign-in page & public JS asset render cleanly under strict CSP
+        // 3. Sign-in page & public JS asset render cleanly under strict CSP with a single CSRF token input
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("University Demonstration Mode Enabled")));
 
-        mockMvc.perform(get("/login"))
+        String loginHtml = mockMvc.perform(get("/login"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'"))
                 .andExpect(content().string(containsString("Demo Accounts")))
@@ -134,20 +134,77 @@ class DemoAccountsIT {
                 .andExpect(content().string(containsString("DemoCustPass#2026")))
                 .andExpect(content().string(containsString("Copy Credentials")))
                 .andExpect(content().string(containsString("Use This Account")))
-                .andExpect(content().string(containsString("/js/demo-login.js")));
+                .andExpect(content().string(containsString("/js/demo-login.js")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(loginHtml.split("name=\"_csrf\"", -1)).hasSize(2); // Exactly 1 _csrf hidden input
 
         mockMvc.perform(get("/js/demo-login.js"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("data-copy-value")))
                 .andExpect(content().string(containsString("data-fill-email")));
 
-        // 4. Reject invalid password on real form login (authentication is never bypassed)
+        // 4. Reject invalid password & enforce CSRF strictly while recovering gracefully on expired login sessions
         mockMvc.perform(post("/login")
                         .with(csrf())
                         .param("username", "demo-admin@meterflow.demo")
                         .param("password", "WrongPassword#2026"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login?error"));
+
+        // Missing _csrf on POST /login still returns strict 403 Forbidden
+        mockMvc.perform(post("/login")
+                        .param("username", "demo-admin@meterflow.demo")
+                        .param("password", "DemoAdminPass#2026"))
+                .andExpect(status().isForbidden());
+
+        // Stale _csrf submitted against an expired/restarted session (MissingCsrfTokenException) rejects auth & redirects cleanly
+        mockMvc.perform(post("/login")
+                        .param("_csrf", "stale-token-from-restarted-instance")
+                        .param("username", "demo-admin@meterflow.demo")
+                        .param("password", "DemoAdminPass#2026"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login?expired"));
+
+        // 4b. Cross-role SavedRequest regression: visiting /customer/dashboard then signing in as Admin must NOT 403
+        MockHttpSession crossRoleSession = new MockHttpSession();
+        mockMvc.perform(get("/customer/dashboard").session(crossRoleSession))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+        mockMvc.perform(post("/login")
+                        .session(crossRoleSession)
+                        .with(csrf())
+                        .param("username", "demo-admin@meterflow.demo")
+                        .param("password", "DemoAdminPass#2026"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/"));
+
+        // Cross-role SavedRequest regression: visiting /operator/overview then signing in as Customer must NOT 403
+        MockHttpSession reverseCrossRoleSession = new MockHttpSession();
+        mockMvc.perform(get("/operator/overview").session(reverseCrossRoleSession))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+        mockMvc.perform(post("/login")
+                        .session(reverseCrossRoleSession)
+                        .with(csrf())
+                        .param("username", "demo-customer@meterflow.demo")
+                        .param("password", "DemoCustPass#2026"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/"));
+
+        // Same-role SavedRequest still redirects seamlessly to the requested page
+        MockHttpSession sameRoleSession = new MockHttpSession();
+        mockMvc.perform(get("/customer/dashboard").session(sameRoleSession))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+        mockMvc.perform(post("/login")
+                        .session(sameRoleSession)
+                        .with(csrf())
+                        .param("username", "demo-customer@meterflow.demo")
+                        .param("password", "DemoCustPass#2026"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("http://localhost/customer/dashboard?continue"));
 
         // 5. Real BCrypt authentication & authorization verification for Demo Admin
         MockHttpSession adminSession = loginAs("demo-admin@meterflow.demo", "DemoAdminPass#2026");

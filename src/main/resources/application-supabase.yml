@@ -8,8 +8,13 @@ spring:
       pool-name: meterflow-supabase-pool
       maximum-pool-size: 6
       minimum-idle: 2
+      idle-timeout: 300000
       max-lifetime: 600000
       connection-timeout: 15000
+  flyway:
+    # Supabase's default "public" schema is non-empty; baseline at version 0 so V1..V8 all execute cleanly.
+    baseline-on-migrate: true
+    baseline-version: "0"
 
 meterflow:
   batch:

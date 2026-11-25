@@ -1,13 +1,12 @@
-# MeterFlow Container Build (Java 25 Temurin JRE Runtime)
-FROM eclipse-temurin:25-jdk-alpine AS builder
+# MeterFlow Container Build (Maven 3.9 + Java 25 Temurin Builder -> Java 25 Temurin JRE Runtime)
+FROM maven:3.9-eclipse-temurin-25-alpine AS builder
 WORKDIR /workspace
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-RUN chmod +x mvnw && ./mvnw -B dependency:go-offline
+COPY pom.xml ./
+RUN mvn -B -ntp dependency:go-offline
 
 COPY src/ src/
-RUN ./mvnw -B package -DskipTests
+RUN mvn -B -ntp package -DskipTests
 
 FROM eclipse-temurin:25-jre-alpine AS runtime
 WORKDIR /app

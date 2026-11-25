@@ -13,6 +13,11 @@
 </header>
 <main class="container">
     <div th:replace="~{fragments/layout :: flashMessages}"></div>
+    <div th:if="${demoModeEnabled}" class="alert alert-info">
+        <strong>University Demonstration Mode Enabled:</strong>
+        Ready-to-use <strong>Admin</strong>, <strong>Operator</strong>, and <strong>Customer</strong> demo accounts are available on the
+        <a th:href="@{/login}">Sign In page</a> with one-click copy and form fill—no registration required.
+    </div>
     <div class="card">
         <h1>MeterFlow — Usage-Based Billing &amp; Metering Platform</h1>
         <p class="subtitle">

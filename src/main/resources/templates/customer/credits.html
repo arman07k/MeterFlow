@@ -28,7 +28,7 @@
                 <tr th:each="g : ${grants}">
                     <td th:text="${g.grantType}">PREPAID</td>
                     <td th:text="${g.description}">Desc</td>
-                    <td><span class="badge badge-info" th:text="${g.status}">ACTIVE</span></td>
+                    <td><span class="badge badge-info" th:text="${g.remainingAmount.isPositive() ? 'ACTIVE' : 'DEPLETED'}">ACTIVE</span></td>
                     <td class="num" th:text="${g.originalAmount.formatted()}">0.00</td>
                     <td class="num"><strong th:text="${g.remainingAmount.formatted()}">0.00</strong></td>
                     <td class="mono" th:text="${g.expiresAt != null ? g.expiresAt : 'No expiry'}">Never</td>
@@ -47,7 +47,7 @@
                 <tbody>
                 <tr th:each="tx : ${transactions}">
                     <td><span class="badge" th:text="${tx.transactionType}">CONSUME</span></td>
-                    <td th:text="${tx.description}">Desc</td>
+                    <td th:text="${tx.reason}">Reason</td>
                     <td class="num" th:text="${tx.amount.formatted()}">0.00</td>
                     <td class="num" th:text="${tx.balanceAfter.formatted()}">0.00</td>
                     <td class="mono" th:text="${tx.createdAt}">ts</td>

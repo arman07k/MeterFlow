@@ -166,7 +166,9 @@ class SecurityFoundationTests {
 
         mockMvc.perform(get("/login"))
                 .andExpect(status().isOk())
-                .andExpect(header().exists(CorrelationIdFilter.CORRELATION_HEADER));
+                .andExpect(header().exists(CorrelationIdFilter.CORRELATION_HEADER))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Demo-Only Environment"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("/js/demo-login.js"))));
     }
 
     @Test

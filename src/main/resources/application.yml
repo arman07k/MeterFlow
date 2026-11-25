@@ -90,6 +90,23 @@ meterflow:
       email: ${METERFLOW_BOOTSTRAP_ADMIN_EMAIL:}
       full-name: ${METERFLOW_BOOTSTRAP_ADMIN_NAME:Platform Administrator}
       password: ${METERFLOW_BOOTSTRAP_ADMIN_PASSWORD:}
+  demo:
+    enabled: ${METERFLOW_DEMO_ENABLED:false}
+    seed-sample-data: ${METERFLOW_DEMO_SEED_SAMPLE_DATA:true}
+    customer-external-key: ${METERFLOW_DEMO_CUSTOMER_KEY:demo-acme-cloud}
+    customer-name: ${METERFLOW_DEMO_CUSTOMER_NAME:Acme Cloud Demo}
+    admin:
+      email: ${METERFLOW_DEMO_ADMIN_EMAIL:demo-admin@meterflow.demo}
+      full-name: ${METERFLOW_DEMO_ADMIN_NAME:Demo Administrator}
+      password: ${METERFLOW_DEMO_ADMIN_PASSWORD:}
+    operator:
+      email: ${METERFLOW_DEMO_OPERATOR_EMAIL:demo-operator@meterflow.demo}
+      full-name: ${METERFLOW_DEMO_OPERATOR_NAME:Demo Operator}
+      password: ${METERFLOW_DEMO_OPERATOR_PASSWORD:}
+    customer:
+      email: ${METERFLOW_DEMO_CUSTOMER_EMAIL:demo-customer@meterflow.demo}
+      full-name: ${METERFLOW_DEMO_CUSTOMER_NAME:Demo Customer}
+      password: ${METERFLOW_DEMO_CUSTOMER_PASSWORD:}
   batch:
     concurrency-limit: 2
   outbox:

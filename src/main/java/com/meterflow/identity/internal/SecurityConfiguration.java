@@ -113,7 +113,7 @@ public class SecurityConfiguration {
                         .sessionFixation(fixation -> fixation.migrateSession())
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/actuator/health", "/actuator/health/**", "/actuator/info", "/css/**", "/error").permitAll()
+                        .requestMatchers("/", "/login", "/actuator/health", "/actuator/health/**", "/actuator/info", "/css/**", "/js/**", "/error").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").hasAnyRole(MeterFlowRoles.ADMIN, MeterFlowRoles.OPERATOR)
                         .requestMatchers("/actuator/**").hasRole(MeterFlowRoles.ADMIN)
                         .requestMatchers("/admin/**").hasRole(MeterFlowRoles.ADMIN)
